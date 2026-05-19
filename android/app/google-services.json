@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "516961615556",
+    "project_id": "ratix-4dcee",
+    "storage_bucket": "ratix-4dcee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516961615556:android:c05f3183c71448697bd391",
+        "android_client_info": {
+          "package_name": "com.example.ratix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkR4b7rXMu6US4iPT0xSEegNavCOa2Fbc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516961615556:android:35dc9bdc54303a937bd391",
+        "android_client_info": {
+          "package_name": "com.ratix.ratix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkR4b7rXMu6US4iPT0xSEegNavCOa2Fbc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

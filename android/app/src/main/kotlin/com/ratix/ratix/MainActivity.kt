@@ -1,4 +1,4 @@
-package com.example.ratix
+package com.ratix.ratix
 
 import io.flutter.embedding.android.FlutterActivity
 
