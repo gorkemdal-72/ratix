@@ -8,6 +8,7 @@ import 'core/app_theme.dart';
 import 'services/auth_service.dart';
 import 'providers/theme_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/verify_email_screen.dart';
 import 'screens/home/home_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,7 +82,6 @@ class AuthWrapper extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Branded loading
                   Text(
                     "✦",
                     style: TextStyle(
@@ -103,9 +103,16 @@ class AuthWrapper extends StatelessWidget {
             ),
           );
         }
+        
         if (snapshot.hasData) {
-          return const HomeScreen();
+          // Kullanıcı giriş yapmış, ama e-postası doğrulanmış mı?
+          if (snapshot.data!.emailVerified) {
+            return const HomeScreen();
+          } else {
+            return const VerifyEmailScreen();
+          }
         }
+        
         return const LoginScreen();
       },
     );

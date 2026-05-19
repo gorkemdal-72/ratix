@@ -40,6 +40,9 @@ class AuthService {
         
         // Auth profilindeki ismi de güncelle
         await user.updateDisplayName(name);
+        
+        // E-posta doğrulama maili gönder
+        await user.sendEmailVerification();
       }
       
       return null; // Hata yok, başarıyla kayıt olundu
