@@ -4,6 +4,7 @@ import '../../core/app_theme.dart';
 import '../../core/app_strings.dart';
 import '../../services/auth_service.dart';
 import 'register_screen.dart';
+import 'otp_verify_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,13 +53,58 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       password: _passwordController.text.trim(),
     );
 
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (error != null) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }
     // Başarılı ise stream otomatik yönlendirecek
+  }
+
+  void _forgotPassword() async {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Şifreyi Sıfırla'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('E-posta adresini gir, sıfırlama linki gönderelim.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'E-posta',
+                prefixIcon: Icon(Icons.email_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('İptal')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Gönder')),
+        ],
+      ),
+    );
+
+    if (confirmed == true && emailCtrl.text.isNotEmpty) {
+      final error = await _authService.resetPassword(emailCtrl.text.trim());
+      if (!mounted) return;
+      
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OtpVerifyScreen(email: emailCtrl.text.trim())),
+        );
+      }
+    }
   }
 
   @override
@@ -112,6 +158,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   ),
                 ),
 
+                // ─── ŞİFREMİ UNUTTUM ───
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _forgotPassword,
+                    child: Text(
+                      'Şifremi Unuttum',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+
                 const SizedBox(height: AppTheme.spaceLg),
               ],
             ),
@@ -133,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             borderRadius: BorderRadius.circular(AppTheme.radiusXl),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.gradientStart.withOpacity(0.3),
+                color: AppTheme.gradientStart.withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),

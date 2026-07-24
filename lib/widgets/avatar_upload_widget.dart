@@ -1,19 +1,26 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_cropper/image_cropper.dart';
+import '../screens/social/fullscreen_avatar_screen.dart';
 import '../core/app_theme.dart';
 import '../core/app_strings.dart';
 
 class AvatarUploadWidget extends StatefulWidget {
   final double radius;
   final VoidCallback? onUploadComplete;
+  final String? initialAvatarUrl;
+  final File? selectedImageFile;
+  final ValueChanged<File?>? onImageSelected;
 
   const AvatarUploadWidget({
     super.key,
     this.radius = 50,
     this.onUploadComplete,
+    this.initialAvatarUrl,
+    this.selectedImageFile,
+    this.onImageSelected,
   });
 
   @override
@@ -22,8 +29,7 @@ class AvatarUploadWidget extends StatefulWidget {
 
 class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
   final ImagePicker _picker = ImagePicker();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
   
   bool _isLoading = false;
 
@@ -37,7 +43,6 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Başlık
                 Padding(
                   padding: const EdgeInsets.all(AppTheme.spaceMd),
                   child: Text(
@@ -45,13 +50,12 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ),
-                // Galeri
                 ListTile(
                   leading: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                     ),
                     child: Icon(
@@ -65,13 +69,12 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
                     _pickImage(ImageSource.gallery);
                   },
                 ),
-                // Kamera
                 ListTile(
                   leading: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                     ),
                     child: Icon(
@@ -105,19 +108,73 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
 
       if (image == null) return;
 
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Fotoğrafı Düzenle',
+            toolbarColor: Colors.deepPurple,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            cropStyle: CropStyle.circle,
+          ),
+          IOSUiSettings(
+            title: 'Fotoğrafı Düzenle',
+            aspectRatioLockEnabled: true,
+            cropStyle: CropStyle.circle,
+          ),
+        ],
+      );
+
+      if (croppedFile == null) return;
+
+      final finalFile = File(croppedFile.path);
+
+      if (widget.onImageSelected != null) {
+        widget.onImageSelected!(finalFile);
+        return;
+      }
+
       setState(() => _isLoading = true);
 
-      User? user = _auth.currentUser;
+      final User? user = _supabase.auth.currentUser;
       if (user != null) {
-        Reference ref = _storage.ref().child('profile_images/${user.uid}.jpg');
-        
         try {
-           UploadTask uploadTask = ref.putFile(File(image.path));
-           TaskSnapshot snapshot = await uploadTask;
-           String downloadUrl = await snapshot.ref.getDownloadURL();
+           final file = finalFile;
+           final bytes = await file.readAsBytes();
+           final fileExt = finalFile.path.split('.').last;
+           final fileName = '${user.id}/avatar.$fileExt';
+           
+           // Upload to Supabase Storage
+           await _supabase.storage.from('avatars').uploadBinary(
+             fileName, 
+             bytes, 
+             fileOptions: const FileOptions(upsert: true)
+           );
+           
+           // Get public URL
+           final String downloadUrl = _supabase.storage.from('avatars').getPublicUrl(fileName);
 
-           await user.updatePhotoURL(downloadUrl);
-           await user.reload();
+           // Update user metadata in Supabase Auth
+           await _supabase.auth.updateUser(
+             UserAttributes(
+               data: {
+                 'avatar_url': downloadUrl,
+                 'display_name': user.userMetadata?['display_name'],
+               }
+             ),
+           );
+           
+           // Update profile table as well (ignore errors if column doesn't exist)
+           try {
+             await _supabase.from('users').update({
+               'avatar_url': downloadUrl
+             }).eq('id', user.id);
+           } catch (_) {
+             // avatar_url column may not exist in users table yet
+           }
            
            if (mounted) {
              setState(() {});
@@ -130,7 +187,7 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
         } catch (e) {
            if (mounted) {
              ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text(AppStrings.errorUpload)),
+               SnackBar(content: Text('${AppStrings.errorUpload} ($e)')),
              );
            }
         }
@@ -148,24 +205,30 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
 
   @override
   Widget build(BuildContext context) {
-    User? user = _auth.currentUser;
+    final User? user = _supabase.auth.currentUser;
+    final String? avatarUrl = widget.initialAvatarUrl ?? user?.userMetadata?['avatar_url'];
+
+    final ImageProvider? backgroundImage = widget.selectedImageFile != null
+        ? FileImage(widget.selectedImageFile!) as ImageProvider
+        : avatarUrl != null
+            ? NetworkImage(avatarUrl) as ImageProvider
+            : null;
 
     return Center(
       child: Stack(
         children: [
-          // Avatar ana gövde
           Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
               ],
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                 width: 3,
               ),
             ),
@@ -182,22 +245,35 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
                       ),
                     ),
                   )
-                : CircleAvatar(
-                    radius: widget.radius,
-                    backgroundColor: Theme.of(context).cardTheme.color,
-                    backgroundImage: user?.photoURL != null
-                        ? NetworkImage(user!.photoURL!)
-                        : null,
-                    child: user?.photoURL == null
-                        ? Icon(
-                            Icons.person_rounded,
-                            size: widget.radius * 0.8,
-                            color: Theme.of(context).textTheme.bodySmall?.color,
-                          )
-                        : null,
+                : GestureDetector(
+                    onTap: () {
+                      if (backgroundImage != null) {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => FullscreenAvatarScreen(
+                            avatarUrl: widget.selectedImageFile == null ? avatarUrl : null,
+                            imageFile: widget.selectedImageFile,
+                            heroTag: 'avatar_${avatarUrl ?? widget.selectedImageFile?.path ?? "placeholder"}',
+                          ),
+                        ));
+                      }
+                    },
+                    child: Hero(
+                      tag: 'avatar_${avatarUrl ?? widget.selectedImageFile?.path ?? "placeholder"}',
+                      child: CircleAvatar(
+                        radius: widget.radius,
+                        backgroundColor: Theme.of(context).cardTheme.color,
+                        backgroundImage: backgroundImage,
+                        child: backgroundImage == null
+                            ? Icon(
+                                Icons.person_rounded,
+                                size: widget.radius * 0.8,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              )
+                            : null,
+                      ),
+                    ),
                   ),
           ),
-          // Kamera butonu
           Positioned(
             bottom: 2,
             right: 2,
@@ -211,7 +287,7 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.gradientStart.withOpacity(0.3),
+                      color: AppTheme.gradientStart.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),

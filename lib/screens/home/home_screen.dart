@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_theme.dart';
@@ -10,6 +12,8 @@ import '../../services/settings_service.dart';
 import '../../providers/theme_provider.dart';
 import '../settings/settings_screen.dart';
 import '../details/category_detail_screen.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum CategorySort { defaultSort, nameAsc, nameDesc }
 
@@ -48,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(AppStrings.myCategories),
         actions: [
           PopupMenuButton<CategorySort>(
-            icon: const Icon(Icons.sort_rounded),
+            icon: const Icon(Icons.swap_vertical_circle_outlined),
             tooltip: AppStrings.sort,
             onSelected: (val) => setState(() => _currentSort = val),
             itemBuilder: (context) => [
@@ -94,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: StreamBuilder<List<CategoryModel>>(
               stream: _dbService.getCategoriesStream(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return Center(
                     child: CircularProgressIndicator(
                       color: Theme.of(context).colorScheme.primary,
@@ -102,11 +106,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Hata: ${snapshot.error}'));
+                }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return _buildEmptyState();
                 }
 
-                List<CategoryModel> categories = snapshot.data!;
+                List<CategoryModel> categories = snapshot.data!.where((c) => !c.isSubCategory).toList();
 
                 if (_searchQuery.isNotEmpty) {
                   categories = categories.where((c) => c.name.toLowerCase().contains(_searchQuery)).toList();
@@ -172,7 +179,11 @@ class _HomeScreenState extends State<HomeScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryDetailScreen(category: category)));
+            if (category.isPrivate) {
+              _showPasswordDialog(context, category);
+            } else {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryDetailScreen(category: category)));
+            }
           },
           child: Padding(
             padding: const EdgeInsets.all(AppTheme.spaceMd),
@@ -183,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   alignment: Alignment.center,
@@ -200,17 +211,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           _buildSmallBadge(
                             category.categoryType.displayName,
                             Theme.of(context).colorScheme.primary,
                           ),
-                          const SizedBox(width: 6),
                           _buildSmallBadge(
                             _getRatingTypeName(category.ratingType),
                             AppTheme.accent,
                           ),
+                          _buildSmallBadge(
+                            '${category.itemCount} Öğe',
+                            Colors.blueGrey,
+                          ),
+                          if (category.isPrivate)
+                            const Icon(Icons.lock_rounded, size: 16, color: Colors.grey),
                         ],
                       ),
                     ],
@@ -219,11 +238,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Üç Nokta Menüsü
                 PopupMenuButton<String>(
                   icon: Icon(Icons.more_vert_rounded, color: Theme.of(context).textTheme.bodySmall?.color),
-                  onSelected: (value) {
+                  onSelected: (value) async {
                     if (value == 'delete') {
                       _confirmDelete(context, () => _dbService.deleteCategory(category.id));
                     } else if (value == 'edit') {
                       _showEditCategoryDialog(context, category);
+                    } else if (value == 'copy') {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('copied_category_id', category.id);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Liste kopyalandı! (Başka bir listeye yapıştırabilirsiniz)')));
+                      }
+                    } else if (value == 'paste') {
+                      final prefs = await SharedPreferences.getInstance();
+                      final copiedId = prefs.getString('copied_category_id');
+                      if (copiedId == null) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Önce kopyala yapmalısınız!')));
+                        return;
+                      }
+                      if (copiedId == category.id) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aynı listeye yapıştıramazsınız!')));
+                        return;
+                      }
+                      
+                      showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+                      final err = await _dbService.pasteCategoryItems(copiedId, category.id);
+                      if (mounted) {
+                        Navigator.pop(context);
+                        if (err == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Öğeler başarıyla yapıştırıldı!')));
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $err')));
+                        }
+                      }
                     }
                   },
                   itemBuilder: (context) => [
@@ -234,6 +281,26 @@ class _HomeScreenState extends State<HomeScreen> {
                           Icon(Icons.edit_outlined, color: Theme.of(context).colorScheme.primary, size: 20),
                           const SizedBox(width: AppTheme.spaceSm),
                           const Text(AppStrings.edit),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'copy',
+                      child: Row(
+                        children: [
+                          Icon(Icons.copy_rounded, color: Theme.of(context).colorScheme.primary, size: 20),
+                          const SizedBox(width: AppTheme.spaceSm),
+                          const Text('Kopyala'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'paste',
+                      child: Row(
+                        children: [
+                          Icon(Icons.paste_rounded, color: Theme.of(context).colorScheme.primary, size: 20),
+                          const SizedBox(width: AppTheme.spaceSm),
+                          const Text('Yapıştır'),
                         ],
                       ),
                     ),
@@ -261,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -286,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppTheme.radiusXl),
               ),
               child: Icon(
@@ -364,9 +431,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─── KATEGORİ EKLEME DİYALOĞU ───
   void _showAddCategoryDialog(BuildContext context) {
     final nameController = TextEditingController();
+    final passwordController = TextEditingController();
     CategoryType selectedType = CategoryType.movie;
     String selectedEmoji = CategoryType.movie.defaultEmoji;
     RatingType selectedRatingType = RatingType.stars5;
+    bool isPrivate = false;
 
     // Kategori tipleri grid'i
     final types = CategoryType.values;
@@ -387,7 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                     ),
                     alignment: Alignment.center,
@@ -417,8 +486,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
-                              : Theme.of(context).colorScheme.primary.withOpacity(0.04),
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
+                              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
                           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                           border: Border.all(
                             color: isSelected
@@ -464,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: selectedEmoji == e
-                            ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
+                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                         border: selectedEmoji == e
@@ -508,6 +577,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
                 ),
+                const SizedBox(height: AppTheme.spaceMd),
+
+                // ── Gizlilik ──
+                SwitchListTile(
+                  title: const Text('Özel (Şifreli) Kategori'),
+                  subtitle: const Text('Bu kategoriye girmek için şifre istenir'),
+                  value: isPrivate,
+                  onChanged: (val) => setState(() => isPrivate = val),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (isPrivate) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori Şifresi',
+                      prefixIcon: Icon(Icons.lock_outline),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -515,15 +605,30 @@ class _HomeScreenState extends State<HomeScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
             ElevatedButton(
               onPressed: () async {
+                if (isPrivate && passwordController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Lütfen kategori için bir şifre belirleyin'), backgroundColor: AppTheme.danger),
+                  );
+                  return;
+                }
+
                 final name = nameController.text.isNotEmpty
                     ? nameController.text
                     : selectedType.displayName;
+                
+                String? passwordHash;
+                if (isPrivate) {
+                  passwordHash = sha256.convert(utf8.encode(passwordController.text.trim())).toString();
+                }
+
                 final newCategory = CategoryModel(
                   id: '',
                   name: name,
                   ratingType: selectedRatingType,
                   icon: selectedEmoji,
                   categoryType: selectedType,
+                  isPrivate: isPrivate,
+                  passwordHash: passwordHash,
                 );
                 final error = await _dbService.addCategory(newCategory);
                 if (!ctx.mounted) return;
@@ -562,7 +667,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                     ),
                     alignment: Alignment.center,
@@ -579,7 +684,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: selectedEmoji == e
-                            ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
+                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                         border: selectedEmoji == e
@@ -618,6 +723,66 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               },
               child: const Text(AppStrings.updateCategory),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  // ─── KATEGORİ ŞİFRESİ GİRİŞ DİYALOĞU ───
+  void _showPasswordDialog(BuildContext context, CategoryModel category) {
+    final passwordController = TextEditingController();
+    bool error = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.lock_rounded, color: AppTheme.accent),
+              const SizedBox(width: 8),
+              Expanded(child: Text('${category.name} (Özel)', overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Bu kategoriye erişmek için şifre giriniz.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Şifre',
+                  prefixIcon: const Icon(Icons.password_rounded),
+                  errorText: error ? 'Hatalı şifre' : null,
+                ),
+                onSubmitted: (_) {
+                  final inputHash = sha256.convert(utf8.encode(passwordController.text.trim())).toString();
+                  if (inputHash == category.passwordHash) {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryDetailScreen(category: category)));
+                  } else {
+                    setState(() => error = true);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+            ElevatedButton(
+              onPressed: () {
+                final inputHash = sha256.convert(utf8.encode(passwordController.text.trim())).toString();
+                if (inputHash == category.passwordHash) {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryDetailScreen(category: category)));
+                } else {
+                  setState(() => error = true);
+                }
+              },
+              child: const Text('Giriş Yap'),
             ),
           ],
         ),

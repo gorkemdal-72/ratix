@@ -46,3 +46,22 @@ app.*.map.json
 
 # API Keys — Güvenlik: Bu dosya GitHub'a gitmesin
 lib/core/api_keys.dart
+
+# ==========================================
+# GÜVENLİK VE GİZLİLİK (SECURITY & PRIVACY)
+# ==========================================
+
+# Firebase Konfigürasyon Dosyaları
+google-services.json
+GoogleService-Info.plist
+firebase_app_id_file.json
+
+# Play Store Yükleme Anahtarları ve Şifreleri (ÇOK ÖNEMLİ)
+*.jks
+*.keystore
+key.properties
+android/key.properties
+
+# Supabase veya Ekstra Şifre Dosyaları
+.env
+.env.*

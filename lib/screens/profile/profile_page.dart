@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_theme.dart';
 import '../../core/app_strings.dart';
 import '../../widgets/avatar_upload_widget.dart';
@@ -14,11 +14,10 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   // Çıkış yapma fonksiyonu
   Future<void> _signOut() async {
-    // Onay diyaloğu göster
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -35,7 +34,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     if (confirm == true) {
-      await _auth.signOut();
+      await _supabase.auth.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()), 
@@ -47,7 +46,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    User? user = _auth.currentUser;
+    final User? user = _supabase.auth.currentUser;
+    final String? displayName = user?.userMetadata?['display_name'];
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -76,7 +76,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                 boxShadow: [
                   BoxShadow(
-                    color: (isDark ? Colors.black : AppTheme.gradientStart).withOpacity(0.2),
+                    color: (isDark ? Colors.black : AppTheme.gradientStart).withValues(alpha: 0.2),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -89,15 +89,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     radius: 50,
                     onUploadComplete: () {
                       setState(() {});
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text(AppStrings.photoUpdated)),
-                      );
                     },
                   ),
                   const SizedBox(height: AppTheme.spaceMd),
                   // Kullanıcı adı
                   Text(
-                    user?.displayName ?? user?.email?.split('@').first ?? AppStrings.guestUser,
+                    displayName ?? user?.email?.split('@').first ?? AppStrings.guestUser,
                     style: GoogleFonts.outfit(
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
@@ -128,7 +125,7 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildInfoCard(
               icon: Icons.fingerprint_rounded,
               label: AppStrings.uid,
-              value: user?.uid ?? '-',
+              value: user?.id ?? '-',
             ),
 
             const SizedBox(height: AppTheme.spaceLg),
@@ -174,7 +171,7 @@ class _ProfilePageState extends State<ProfilePage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppTheme.radiusSm),
             ),
             child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),

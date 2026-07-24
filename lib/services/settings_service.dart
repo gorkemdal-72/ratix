@@ -1,55 +1,84 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SettingsService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  String get _uid {
+    final id = _supabase.auth.currentUser?.id;
+    if (id == null) throw Exception('Oturum açık değil');
+    return id;
+  }
 
   // Kullanıcının mevcut ayarlarını güncelleme fonksiyonu
   Future<void> updateRatingPreference(String preference) async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      // 'preferences' map'inin tamamını değil, SADECE 'defaultRatingType' alanını günceller
-      await _firestore.collection('users').doc(user.uid).update({
-        'preferences.defaultRatingType': preference, 
-      });
+    try {
+      final user = await getUserData();
+      final prefs = (user?['preferences'] as Map<String, dynamic>?) ?? {};
+      prefs['defaultRatingType'] = preference;
+      
+      await _supabase.from('users').update({
+        'preferences': prefs
+      }).eq('id', _uid);
+    } catch (e) {
+      debugPrint('Ayarlar güncellenemedi: $e');
     }
   }
 
   // Tema tercihini güncelle 
   Future<void> updateThemePreference(bool preference) async {
-      User? user = _auth.currentUser;
-       if (user != null) {
+    try {
+      final user = await getUserData();
+      final prefs = (user?['preferences'] as Map<String, dynamic>?) ?? {};
+      prefs['defaultTheme'] = preference;
+      
+      await _supabase.from('users').update({
+        'preferences': prefs
+      }).eq('id', _uid);
+    } catch (e) {
+      debugPrint('Tema güncellenemedi: $e');
+    }
+  }
 
-         await _firestore.collection('users').doc(user.uid).update({
-            'preferences.defaultTheme': preference,
-         });
-       }
+  // Günlük Gizliliğini güncelle
+  Future<void> updateDiaryVisibility(String visibility) async {
+    try {
+      await _supabase.from('users').update({
+        'diary_visibility': visibility
+      }).eq('id', _uid);
+    } catch (e) {
+      debugPrint('Gizlilik güncellenemedi: $e');
+    }
   }
 
   // Profil bilgilerini güncelleme
   Future<void> updateProfileInfo(String displayName, String bio) async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      // Auth profilini güncelle
-      await user.updateDisplayName(displayName);
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(
+          data: {
+            'display_name': displayName,
+          }
+        ),
+      );
       
-      // Firestore'a detaylı bilgi yaz
-      await _firestore.collection('users').doc(user.uid).set({
-        'displayName': displayName,
+      await _supabase.from('users').update({
+        'display_name': displayName,
         'bio': bio,
-      }, SetOptions(merge: true));
+      }).eq('id', _uid);
+    } catch (e) {
+      debugPrint('Profil güncellenemedi: $e');
     }
   }
-    // Kullanıcı verilerini veritabanından oku
+
+  // Kullanıcı verilerini veritabanından oku
   Future<Map<String, dynamic>?> getUserData() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
-      if (doc.exists) {
-        return doc.data() as Map<String, dynamic>;
-      }
+    try {
+      final data = await _supabase.from('users').select().eq('id', _uid).maybeSingle();
+      return data;
+    } catch (e) {
+      debugPrint('Kullanıcı verisi alınamadı: $e');
+      return null;
     }
-    return null;
   }
 }

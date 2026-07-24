@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/app_theme.dart';
 import '../../core/app_strings.dart';
 import '../../services/auth_service.dart';
+import 'email_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   
   // Controllers
   final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   
@@ -41,6 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   void dispose() {
     _fadeController.dispose();
     _nameController.dispose();
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -50,10 +53,20 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
+      final username = _usernameController.text.trim().toLowerCase();
+      bool isAvailable = await _authService.checkUsernameAvailable(username);
+      if (!isAvailable) {
+        setState(() => _isLoading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bu kullanıcı adı zaten alınmış.')));
+        return;
+      }
+
       String? error = await _authService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
         name: _nameController.text.trim(),
+        username: username,
       );
 
       setState(() => _isLoading = false);
@@ -62,9 +75,13 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
       } else {
-        // Başarılı olursa zaten main.dart'taki stream bizi Home'a atacak
         if (!mounted) return;
-        Navigator.pop(context);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(email: _emailController.text.trim()),
+          ),
+        );
       }
     }
   }
@@ -102,6 +119,22 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       ),
                       const SizedBox(height: AppTheme.spaceMd),
 
+                      // Kullanıcı Adı alanı
+                      TextFormField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          labelText: "Kullanıcı Adı",
+                          prefixIcon: Icon(Icons.alternate_email),
+                        ),
+                        validator: (val) {
+                          if (val!.isEmpty) return "Kullanıcı adı boş olamaz";
+                          if (val.contains(' ')) return "Kullanıcı adı boşluk içeremez";
+                          if (val.toLowerCase() != val) return "Sadece küçük harf kullanın";
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: AppTheme.spaceMd),
+
                       // Email alanı
                       TextFormField(
                         controller: _emailController,
@@ -126,7 +159,13 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
                         ),
-                        validator: (val) => val!.length < 6 ? "Şifre en az 6 karakter olmalı" : null,
+                        validator: (val) {
+                          if (val == null || val.length < 6) return "Şifre en az 6 karakter olmalı";
+                          if (!RegExp(r'(?=.*[a-zA-Z])(?=.*[0-9])').hasMatch(val)) {
+                            return "Şifre en az bir harf ve bir sayı içermelidir";
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: AppTheme.spaceLg),
 
@@ -189,7 +228,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
             borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.gradientStart.withOpacity(0.3),
+                color: AppTheme.gradientStart.withValues(alpha: 0.3),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),

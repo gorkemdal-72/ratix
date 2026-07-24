@@ -6,9 +6,9 @@ class AppTheme {
   AppTheme._();
 
   // ─── ANA RENKLER ───
-  // Genel puanlama uygulaması — Indigo/Violet ton
-  static const Color _primaryLight = Color(0xFF6366F1); // Indigo 500
-  static const Color _primaryDark = Color(0xFF818CF8);  // Indigo 400 (dark mode)
+  // Genel puanlama uygulaması
+  static const Color _primaryLight = Color(0xFF10B981); // Logo Yeşili (Emerald 500)
+  static const Color _primaryDark = Color(0xFF34D399);  // Açık Yeşil (Emerald 400 - dark mode için)
 
   // Arka plan renkleri
   static const Color _scaffoldLight = Color(0xFFF8FAFC); // Slate 50
@@ -35,8 +35,8 @@ class AppTheme {
   static const Color danger = Color(0xFFEF4444);    // Red 500
 
   // Gradient renkleri
-  static const Color gradientStart = Color(0xFF6366F1); // Indigo
-  static const Color gradientEnd = Color(0xFF8B5CF6);    // Violet 500
+  static const Color gradientStart = Color(0xFF10B981); // Emerald 500
+  static const Color gradientEnd = Color(0xFF047857);   // Emerald 700
 
   // ─── PUAN RENK KODLARl ───
   static Color ratingColor(double rating, double maxRating) {
@@ -64,7 +64,7 @@ class AppTheme {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return [
       BoxShadow(
-        color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+        color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.06),
         blurRadius: 12,
         offset: const Offset(0, 4),
       ),
@@ -73,7 +73,7 @@ class AppTheme {
 
   // ─── GRADIENTS ───
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+    colors: [Color(0xFF10B981), Color(0xFF047857)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -85,7 +85,7 @@ class AppTheme {
   );
 
   static const LinearGradient headerGradientLight = LinearGradient(
-    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+    colors: [Color(0xFF10B981), Color(0xFF059669)], // Açık yeşil ve koyu yeşil
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -230,7 +230,7 @@ class AppTheme {
           return Colors.grey.shade400;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return _primaryLight.withOpacity(0.3);
+          if (states.contains(WidgetState.selected)) return _primaryLight.withValues(alpha: 0.3);
           return Colors.grey.shade300;
         }),
       ),
@@ -295,7 +295,7 @@ class AppTheme {
         color: _cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          side: BorderSide(color: Colors.white.withOpacity(0.08)),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
         ),
         margin: const EdgeInsets.only(bottom: spaceSm),
       ),
@@ -337,7 +337,7 @@ class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white.withOpacity(0.06),
+        fillColor: Colors.white.withValues(alpha: 0.06),
         contentPadding: const EdgeInsets.symmetric(horizontal: spaceMd, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
@@ -378,7 +378,7 @@ class AppTheme {
       ),
 
       dividerTheme: DividerThemeData(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha: 0.08),
         space: spaceLg,
         thickness: 1,
       ),
@@ -389,7 +389,7 @@ class AppTheme {
           return Colors.grey.shade600;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return _primaryDark.withOpacity(0.3);
+          if (states.contains(WidgetState.selected)) return _primaryDark.withValues(alpha: 0.3);
           return Colors.grey.shade700;
         }),
       ),

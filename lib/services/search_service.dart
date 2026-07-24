@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/category_type.dart';
@@ -58,7 +59,7 @@ class SearchService {
         return SearchResult(
           externalId: item['id'].toString(),
           title: title,
-          subtitle: year?.toString(),
+          subtitle: year != null ? '$year' : null,
           posterUrl: poster,
           year: year,
           mediaType: mediaType,
@@ -68,49 +69,236 @@ class SearchService {
       }).where((r) => r.title.isNotEmpty).toList();
     } catch (e) {
       // ignore: avoid_print
-      print('[SearchService] TMDB HATA: $e');
+      debugPrint('[SearchService] TMDB HATA: $e');
       return [];
     }
   }
 
-  // ─── Open Library: Kitap (Key gerektirmez!) ───
-  Future<List<SearchResult>> _searchBooks(String query) async {
+  // ─── TMDB: Runtime Getir (Film & Dizi) ───
+  Future<int?> getTmdbRuntime(String mediaType, String id) async {
+    if (mediaType != 'movie' && mediaType != 'tv') return null;
     try {
+      final key = ApiKeys.tmdb;
+      if (key == 'BURAYA_TMDB_KEY_YAZAR') return null;
+
       final url = Uri.parse(
-        'https://openlibrary.org/search.json?q=$query&limit=10&fields=key,title,author_name,first_publish_year,cover_i',
+        'https://api.themoviedb.org/3/$mediaType/$id?api_key=$key&language=tr-TR',
       );
-      final res = await http.get(url, headers: {
-        'User-Agent': 'Ratix/1.0 (flutter app)',
-      }).timeout(const Duration(seconds: 10));
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return null;
+
+      final data = json.decode(res.body) as Map<String, dynamic>;
+
+      if (mediaType == 'movie') {
+        return (data['runtime'] as num?)?.toInt(); // Dakika cinsinden
+      } else if (mediaType == 'tv') {
+        int avgRuntime = 0;
+        final runtimes = data['episode_run_time'] as List?;
+        if (runtimes != null && runtimes.isNotEmpty && runtimes[0] is num) {
+          avgRuntime = (runtimes[0] as num).toInt();
+        } else if (data['last_episode_to_air'] != null && data['last_episode_to_air']['runtime'] != null) {
+          if (data['last_episode_to_air']['runtime'] is num) {
+            avgRuntime = (data['last_episode_to_air']['runtime'] as num).toInt();
+          }
+        }
+
+        final numEpisodes = (data['number_of_episodes'] as num?)?.toInt();
+        if (avgRuntime > 0 && numEpisodes != null && numEpisodes > 0) {
+          return avgRuntime * numEpisodes;
+        } else if (numEpisodes != null && numEpisodes > 0) {
+          return 45 * numEpisodes; // Ortalama 45dk varsay
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[SearchService] getTmdbRuntime HATA: $e');
+      return null;
+    }
+  }
+
+  // ─── TMDB: TV Dizi Sezon Detaylarını Getir ───
+  Future<TvShowDetails?> getTvDetails(String tvId) async {
+    try {
+      final key = ApiKeys.tmdb;
+      if (key == 'BURAYA_TMDB_KEY_YAZAR') return null;
+
+      final url = Uri.parse(
+        'https://api.themoviedb.org/3/tv/$tvId?api_key=$key&language=tr-TR',
+      );
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return null;
+
+      final data = json.decode(res.body) as Map<String, dynamic>;
+
+      int avgRuntime = 45;
+      final runtimes = data['episode_run_time'] as List?;
+      if (runtimes != null && runtimes.isNotEmpty && runtimes[0] is num) {
+        avgRuntime = (runtimes[0] as num).toInt();
+      } else if (data['last_episode_to_air'] != null && data['last_episode_to_air']['runtime'] != null) {
+        if (data['last_episode_to_air']['runtime'] is num) {
+          avgRuntime = (data['last_episode_to_air']['runtime'] as num).toInt();
+        }
+      }
+
+      final seasonsRaw = (data['seasons'] as List?) ?? [];
+      final List<TvSeasonInfo> seasons = [];
+      for (final s in seasonsRaw) {
+        final seasonNum = (s['season_number'] as num?)?.toInt() ?? 0;
+        // Season 0 (Specials) genelde harici bırakılır ama seasonNum >= 1 alalım
+        if (seasonNum > 0) {
+          seasons.add(TvSeasonInfo(
+            seasonNumber: seasonNum,
+            name: (s['name'] as String?) ?? '$seasonNum. Sezon',
+            episodeCount: (s['episode_count'] as num?)?.toInt() ?? 0,
+            posterPath: s['poster_path'] as String?,
+            overview: s['overview'] as String?,
+          ));
+        }
+      }
+
+      return TvShowDetails(
+        tvId: tvId,
+        name: (data['name'] as String?) ?? '',
+        numberOfSeasons: (data['number_of_seasons'] as num?)?.toInt() ?? seasons.length,
+        numberOfEpisodes: (data['number_of_episodes'] as num?)?.toInt() ?? 0,
+        avgEpisodeRuntime: avgRuntime,
+        seasons: seasons,
+      );
+    } catch (e) {
+      debugPrint('[SearchService] getTvDetails HATA: $e');
+      return null;
+    }
+  }
+
+  // ─── TMDB: Belirli Bir Sezonun Bölümlerini Getir ───
+  Future<List<TvEpisodeInfo>> getTvSeasonEpisodes(String tvId, int seasonNumber) async {
+    try {
+      final key = ApiKeys.tmdb;
+      if (key == 'BURAYA_TMDB_KEY_YAZAR') return [];
+
+      final url = Uri.parse(
+        'https://api.themoviedb.org/3/tv/$tvId/season/$seasonNumber?api_key=$key&language=tr-TR',
+      );
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
 
       final data = json.decode(res.body) as Map<String, dynamic>;
-      final results = (data['docs'] as List?) ?? [];
+      final episodesRaw = (data['episodes'] as List?) ?? [];
 
-      return results.take(10).map((item) {
-        final coverId = item['cover_i'];
-        final poster = coverId != null
-            ? 'https://covers.openlibrary.org/b/id/$coverId-M.jpg'
-            : null;
-        final authors = (item['author_name'] as List?)?.join(', ');
-
-        return SearchResult(
-          externalId: (item['key'] ?? '').toString().replaceAll('/works/', ''),
-          title: item['title'] ?? '',
-          subtitle: authors,
-          posterUrl: poster,
-          year: item['first_publish_year'] as int?,
-          mediaType: 'book',
-          genres: const [],
-          author: authors,
-          overview: null,
+      return episodesRaw.map((ep) {
+        return TvEpisodeInfo(
+          episodeNumber: (ep['episode_number'] as num?)?.toInt() ?? 0,
+          seasonNumber: (ep['season_number'] as num?)?.toInt() ?? seasonNumber,
+          name: (ep['name'] as String?) ?? '${ep['episode_number']}. Bölüm',
+          runtime: (ep['runtime'] as num?)?.toInt(),
+          overview: ep['overview'] as String?,
         );
-      }).where((r) => r.title.isNotEmpty).toList();
+      }).toList();
     } catch (e) {
-      // ignore: avoid_print
-      print('[SearchService] Open Library HATA: $e');
+      debugPrint('[SearchService] getTvSeasonEpisodes HATA: $e');
       return [];
     }
+  }
+
+  // ─── Kitap Arama (Google Books -> Fallback: OpenLibrary) ───
+  Future<List<SearchResult>> _searchBooks(String query) async {
+    try {
+      final googleResults = await _searchGoogleBooks(query);
+      if (googleResults.isNotEmpty) return googleResults;
+    } catch (e) {
+      debugPrint('[SearchService] Google Books Failed, falling back to OpenLibrary. Error: $e');
+    }
+
+    try {
+      return await _searchOpenLibrary(query);
+    } catch (e) {
+      debugPrint('[SearchService] OpenLibrary Failed: $e');
+      return [];
+    }
+  }
+
+  Future<List<SearchResult>> _searchGoogleBooks(String query) async {
+    final q = Uri.encodeQueryComponent(query.trim());
+    String urlStr = 'https://www.googleapis.com/books/v1/volumes?q=$q&maxResults=10&printType=all';
+    
+    if (ApiKeys.googleBooksApiKey.isNotEmpty) {
+      urlStr += '&key=${ApiKeys.googleBooksApiKey}';
+    }
+
+    final res = await http.get(Uri.parse(urlStr), headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'Ratix/4.0 (Flutter)',
+    }).timeout(const Duration(seconds: 15));
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body.length > 100 ? res.body.substring(0, 100) : res.body}');
+    }
+
+    final data = json.decode(res.body) as Map<String, dynamic>;
+    final results = (data['items'] as List?) ?? [];
+
+    return results.map((item) {
+      final volInfo = (item['volumeInfo'] ?? {}) as Map<String, dynamic>;
+      final title = (volInfo['title'] ?? '') as String;
+      final authors = (volInfo['authors'] as List?)?.join(', ');
+      final publishedDate = volInfo['publishedDate'] as String?;
+      final year = publishedDate != null && publishedDate.length >= 4
+          ? int.tryParse(publishedDate.substring(0, 4))
+          : null;
+
+      String? poster = volInfo['imageLinks']?['smallThumbnail'] as String?;
+      poster ??= volInfo['imageLinks']?['thumbnail'] as String?;
+
+      return SearchResult(
+        externalId: item['id']?.toString() ?? '',
+        title: title,
+        subtitle: authors,
+        posterUrl: poster?.replaceAll('http:', 'https:'),
+        year: year,
+        mediaType: 'book',
+        genres: (volInfo['categories'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+        author: authors,
+        overview: volInfo['description'] as String?,
+      );
+    }).where((r) => r.title.isNotEmpty).toList();
+  }
+
+  Future<List<SearchResult>> _searchOpenLibrary(String query) async {
+    final q = Uri.encodeQueryComponent(query.trim());
+    final url = Uri.parse('https://openlibrary.org/search.json?q=$q&limit=10');
+
+    final res = await http.get(url, headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'Ratix/4.0 (Flutter)',
+    }).timeout(const Duration(seconds: 15));
+
+    if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+
+    final data = json.decode(res.body) as Map<String, dynamic>;
+    final docs = data['docs'] as List? ?? [];
+
+    return docs.map((doc) {
+      final title = doc['title'] as String? ?? '';
+      final author = (doc['author_name'] as List?)?.join(', ');
+      final year = doc['first_publish_year'] as int?;
+      final coverId = doc['cover_i'];
+      
+      String? posterUrl;
+      if (coverId != null) posterUrl = 'https://covers.openlibrary.org/b/id/$coverId-M.jpg';
+
+      final externalId = (doc['key'] as String?)?.replaceAll('/works/', '') ?? title;
+
+      return SearchResult(
+        externalId: externalId,
+        title: title,
+        subtitle: author,
+        posterUrl: posterUrl,
+        year: year,
+        mediaType: 'book',
+        genres: (doc['subject'] as List?)?.take(3).map((e) => e.toString()).toList() ?? const [],
+        author: author,
+      );
+    }).where((r) => r.title.isNotEmpty).toList();
   }
 
   // ─── RAWG: Oyun ───
@@ -151,7 +339,7 @@ class SearchService {
       }).where((r) => r.title.isNotEmpty).toList();
     } catch (e) {
       // ignore: avoid_print
-      print('[SearchService] RAWG HATA: $e');
+      debugPrint('[SearchService] RAWG HATA: $e');
       return [];
     }
   }
@@ -160,7 +348,7 @@ class SearchService {
   Future<List<SearchResult>> _searchMusic(String query) async {
     try {
       final url = Uri.parse(
-        'https://itunes.apple.com/search?term=$query&entity=album&limit=10&country=TR',
+        'https://itunes.apple.com/search?term=$query&entity=album&limit=10&country=US',
       );
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
@@ -189,7 +377,7 @@ class SearchService {
       }).where((r) => r.title.isNotEmpty).toList();
     } catch (e) {
       // ignore: avoid_print
-      print('[SearchService] iTunes HATA: $e');
+      debugPrint('[SearchService] iTunes HATA: $e');
       return [];
     }
   }
@@ -216,6 +404,57 @@ class SearchResult {
     required this.mediaType,
     this.genres = const [],
     this.author,
+    this.overview,
+  });
+}
+
+// ─── TMDB TV Dizi Detay Modelleri ───
+class TvShowDetails {
+  final String tvId;
+  final String name;
+  final int numberOfSeasons;
+  final int numberOfEpisodes;
+  final int avgEpisodeRuntime;
+  final List<TvSeasonInfo> seasons;
+
+  TvShowDetails({
+    required this.tvId,
+    required this.name,
+    required this.numberOfSeasons,
+    required this.numberOfEpisodes,
+    required this.avgEpisodeRuntime,
+    required this.seasons,
+  });
+}
+
+class TvSeasonInfo {
+  final int seasonNumber;
+  final String name;
+  final int episodeCount;
+  final String? posterPath;
+  final String? overview;
+
+  TvSeasonInfo({
+    required this.seasonNumber,
+    required this.name,
+    required this.episodeCount,
+    this.posterPath,
+    this.overview,
+  });
+}
+
+class TvEpisodeInfo {
+  final int episodeNumber;
+  final int seasonNumber;
+  final String name;
+  final int? runtime;
+  final String? overview;
+
+  TvEpisodeInfo({
+    required this.episodeNumber,
+    required this.seasonNumber,
+    required this.name,
+    this.runtime,
     this.overview,
   });
 }

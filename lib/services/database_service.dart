@@ -1,182 +1,328 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/category_model.dart';
 import '../models/item_model.dart';
+import 'search_service.dart';
 
 class DatabaseService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Şu anki kullanıcının 'categories' koleksiyonuna erişim
-  CollectionReference get _categoriesRef {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) throw Exception("Kullanıcı oturum açmamış.");
-    return _firestore.collection('users').doc(uid).collection('categories');
+  String get _uid {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) throw Exception("User not authenticated.");
+    return uid;
   }
 
-  // Kategori Listesini Canlı Dinle (Stream)
-  Stream<List<CategoryModel>> getCategoriesStream() {
+  // --- Categories Stream (Realtime + Offline Cache) ---
+  Stream<List<CategoryModel>> getCategoriesStream() async* {
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'categories_cache_$_uid';
+
+    final cachedData = prefs.getString(cacheKey);
+    if (cachedData != null) {
+      try {
+        final List decoded = jsonDecode(cachedData);
+        yield decoded.map((data) => CategoryModel.fromMap(data, data['id'])).toList();
+      } catch (_) {}
+    }
+
+    yield* _supabase
+        .from('categories')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', _uid)
+        .order('updated_at', ascending: false)
+        .handleError((e) {
+          debugPrint('[DatabaseService] getCategoriesStream ERROR: $e');
+        })
+        .map((rows) {
+          prefs.setString(cacheKey, jsonEncode(rows));
+          return rows.map((data) => CategoryModel.fromMap(data, data['id'])).toList();
+        });
+  }
+
+  // --- Items Stream (Realtime + Offline Cache) ---
+  Stream<List<ItemModel>> getItemsStream(String categoryId) async* {
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'items_cache_${_uid}_$categoryId';
+
+    final cachedData = prefs.getString(cacheKey);
+    if (cachedData != null) {
+      try {
+        final List decoded = jsonDecode(cachedData);
+        yield decoded.map((data) => ItemModel.fromMap(data, data['id'])).toList();
+      } catch (_) {}
+    }
+
+    yield* _supabase
+        .from('items')
+        .stream(primaryKey: ['id'])
+        .eq('category_id', categoryId)
+        .order('created_at', ascending: false)
+        .handleError((e) {
+          debugPrint('[DatabaseService] getItemsStream ERROR: $e');
+        })
+        .map((rows) {
+          prefs.setString(cacheKey, jsonEncode(rows));
+          return rows.map((data) => ItemModel.fromMap(data, data['id'])).toList();
+        });
+  }
+
+  // --- Fetch categories once (for back-navigation reliability) ---
+  Future<List<CategoryModel>> fetchCategories() async {
     try {
-      return _categoriesRef
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .map((snapshot) {
-        return snapshot.docs.map((doc) {
-          return CategoryModel.fromMap(
-              doc.data() as Map<String, dynamic>, doc.id);
-        }).toList();
-      }).handleError((error) {
-        // ignore: avoid_print
-        print('[DatabaseService] getCategoriesStream HATA: $error');
-      });
+      final data = await _supabase
+          .from('categories')
+          .select()
+          .eq('user_id', _uid)
+          .order('updated_at', ascending: false);
+      return data.map((row) => CategoryModel.fromMap(row, row['id'])).toList();
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] getCategoriesStream exception: $e');
-      return const Stream.empty();
+      debugPrint('[DatabaseService] fetchCategories ERROR: $e');
+      return [];
     }
   }
 
-  // Kategori Ekle
+  // --- Add Category ---
   Future<String?> addCategory(CategoryModel category) async {
     try {
-      await _categoriesRef.add(category.toMap());
-      return null; // başarılı
+      await _supabase.from('categories').insert({
+        'user_id': _uid,
+        'name': category.name,
+        'icon': category.icon,
+        'color_value': 0,
+        'category_type': category.categoryType.toString().split('.').last,
+        'rating_type': category.ratingType.toString().split('.').last,
+        'is_private': category.isPrivate,
+        if (category.passwordHash != null) 'password_hash': category.passwordHash,
+        if (category.parentId != null) 'parent_id': category.parentId,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      return null;
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] addCategory HATA: $e');
+      debugPrint('[DatabaseService] addCategory ERROR: $e');
       return e.toString();
     }
   }
 
-  // Kategori Sil
+  // --- SubCategories Stream ---
+  Stream<List<CategoryModel>> getSubCategoriesStream(String parentId) async* {
+    yield* _supabase
+        .from('categories')
+        .stream(primaryKey: ['id'])
+        .eq('parent_id', parentId)
+        .order('updated_at', ascending: false)
+        .handleError((e) {
+          debugPrint('[DatabaseService] getSubCategoriesStream ERROR: $e');
+        })
+        .map((rows) => rows.map((data) => CategoryModel.fromMap(data, data['id'])).toList());
+  }
+
+  // --- Update Category ---
+  Future<String?> updateCategory(String id, String name, String icon) async {
+    try {
+      await _supabase.from('categories').update({
+        'name': name,
+        'icon': icon,
+      }).eq('id', id);
+      return null;
+    } catch (e) {
+      debugPrint('[DatabaseService] updateCategory ERROR: $e');
+      return e.toString();
+    }
+  }
+
+  // --- Delete Category ---
   Future<String?> deleteCategory(String categoryId) async {
     try {
-      await _categoriesRef.doc(categoryId).delete();
+      await _supabase.from('categories').delete().eq('id', categoryId);
       return null;
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] deleteCategory HATA: $e');
+      debugPrint('[DatabaseService] deleteCategory ERROR: $e');
       return e.toString();
     }
   }
 
-  // Kategoriyi Düzenle (İsim ve Emoji)
-  Future<String?> updateCategory(String categoryId, String newName, String newIcon) async {
+  // --- Duplicate Category ---
+  Future<String?> duplicateCategory(String categoryId) async {
     try {
-      await _categoriesRef.doc(categoryId).update({
-        'name': newName,
-        'icon': newIcon,
-      });
-      return null;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] updateCategory HATA: $e');
-      return e.toString();
-    }
-  }
+      // 1. Fetch category
+      final catRes = await _supabase.from('categories').select().eq('id', categoryId).single();
+      
+      // 2. Create new category
+      final newCatRes = await _supabase.from('categories').insert({
+        'user_id': _uid,
+        'name': '${catRes['name']} (Kopya)',
+        'rating_type': catRes['rating_type'],
+        'icon': catRes['icon'],
+        'category_type': catRes['category_type'],
+        'is_private': catRes['is_private'] ?? false,
+      }).select('id').single();
+      
+      final newCatId = newCatRes['id'] as String;
 
-  CollectionReference _getItemsRef(String categoryId) {
-    return _categoriesRef.doc(categoryId).collection('items');
-  }
+      // 3. Fetch items
+      final itemsRes = await _supabase.from('items').select().eq('category_id', categoryId);
+      final List<dynamic> items = itemsRes;
 
-  // Item Listesini Getir
-  Stream<List<ItemModel>> getItemsStream(String categoryId) {
-    try {
-      return _getItemsRef(categoryId)
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .map((snapshot) {
-        return snapshot.docs.map((doc) {
-          return ItemModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      // 4. Insert items to new category
+      if (items.isNotEmpty) {
+        final newItems = items.map((item) {
+          final newItem = Map<String, dynamic>.from(item as Map<String, dynamic>);
+          newItem.remove('id'); 
+          newItem['category_id'] = newCatId;
+          newItem['user_id'] = _uid;
+          newItem['created_at'] = DateTime.now().toUtc().toIso8601String();
+          return newItem;
         }).toList();
-      }).handleError((error) {
-        // ignore: avoid_print
-        print('[DatabaseService] getItemsStream HATA: $error');
-      });
-    } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] getItemsStream exception: $e');
-      return const Stream.empty();
-    }
-  }
-
-  // Item içeriğini Düzenle
-  Future<String?> updateItem(String categoryId, String itemId, String newTitle, String newDescription) async {
-    try {
-      await _getItemsRef(categoryId).doc(itemId).update({
-        'title': newTitle,
-        'description': newDescription,
-      });
+        
+        await _supabase.from('items').insert(newItems);
+      }
       return null;
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] updateItem HATA: $e');
+      debugPrint('[DatabaseService] duplicateCategory ERROR: $e');
       return e.toString();
     }
   }
 
-  // Item Ekle
-  Future<String?> addItem(String categoryId, ItemModel item) async {
+  // --- Paste Items from another category ---
+  Future<String?> pasteCategoryItems(String fromCategoryId, String toCategoryId) async {
     try {
-      await _getItemsRef(categoryId).add(item.toMap());
+      final itemsRes = await _supabase.from('items').select().eq('category_id', fromCategoryId);
+      final List<dynamic> items = itemsRes;
+
+      if (items.isNotEmpty) {
+        final newItems = items.map((item) {
+          final newItem = Map<String, dynamic>.from(item as Map<String, dynamic>);
+          newItem.remove('id'); 
+          newItem['category_id'] = toCategoryId;
+          newItem['user_id'] = _uid;
+          newItem['created_at'] = DateTime.now().toUtc().toIso8601String();
+          return newItem;
+        }).toList();
+        
+        await _supabase.from('items').insert(newItems);
+      }
       return null;
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] addItem HATA: $e');
+      debugPrint('[DatabaseService] pasteCategoryItems ERROR: $e');
       return e.toString();
     }
   }
 
-  // Item Puanını Güncelle
-  Future<String?> updateItemRating(String categoryId, String itemId, double newRating) async {
+  // --- Add Item ---
+  Future<String> addItem(String categoryId, ItemModel item) async {
+    final res = await _supabase.from('items').insert({
+      'category_id': categoryId,
+      'user_id': _uid,
+      'title': item.title,
+      'rating': item.rating,
+      'created_at': item.createdAt.toUtc().toIso8601String(),
+      'poster_url': item.posterUrl,
+      'year': item.year,
+      'watch_status': item.watchStatus,
+      'external_id': item.externalId,
+      'media_type': item.mediaType,
+      'genres': item.genres.join(','),
+      'author': item.author,
+      'overview': item.overview,
+      'is_favorite': item.isFavorite,
+      'review': item.review,
+      'runtime': item.runtime,
+      if (item.seasonsData != null) 'seasons_data': item.seasonsData,
+    }).select('id').single();
+    return res['id'] as String;
+  }
+
+  // --- Update Item Seasons Data ---
+  Future<void> updateItemSeasons(String itemId, Map<String, dynamic> seasonsData, int calculatedRuntime) async {
     try {
-      await _getItemsRef(categoryId).doc(itemId).update({
-        'rating': newRating,
-      });
-      return null;
+      await _supabase.from('items').update({
+        'seasons_data': seasonsData,
+        'runtime': calculatedRuntime,
+      }).eq('id', itemId);
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] updateItemRating HATA: $e');
-      return e.toString();
+      debugPrint('[DatabaseService] updateItemSeasons ERROR: $e');
     }
   }
 
-  // Item Sil
+  // --- Update Item Runtime ---
+  Future<void> updateItemRuntime(String itemId, int runtime) async {
+    try {
+      await _supabase.from('items').update({'runtime': runtime}).eq('id', itemId);
+    } catch (e) {
+      debugPrint('[DatabaseService] updateItemRuntime ERROR: $e');
+    }
+  }
+
+  final Set<String> _backfillingItemIds = {};
+
+  /// Check items without runtime and fetch from TMDB, updating DB automatically
+  Future<void> checkAndBackfillRuntimes(List<ItemModel> items) async {
+    final missingItems = items.where((i) =>
+      i.id.isNotEmpty &&
+      i.runtime == null &&
+      i.externalId != null &&
+      i.externalId!.isNotEmpty &&
+      i.mediaType != null &&
+      (i.mediaType == 'movie' || i.mediaType == 'tv') &&
+      !_backfillingItemIds.contains(i.id)
+    ).toList();
+
+    if (missingItems.isEmpty) return;
+
+    for (final item in missingItems) {
+      _backfillingItemIds.add(item.id);
+      try {
+        final runtime = await SearchService.instance.getTmdbRuntime(item.mediaType!, item.externalId!);
+        if (runtime != null && runtime > 0) {
+          await updateItemRuntime(item.id, runtime);
+        }
+      } catch (e) {
+        debugPrint('[DatabaseService] backfill error for ${item.title}: $e');
+      }
+    }
+  }
+
+  // --- Get Item with Category ---
+  Future<Map<String, dynamic>?> getItemWithCategory(String itemId) async {
+    try {
+      final res = await _supabase.from('items')
+        .select('*, categories(id, name, icon, category_type)')
+        .eq('id', itemId)
+        .maybeSingle();
+      return res;
+    } catch (e) {
+      debugPrint('[DatabaseService] getItemWithCategory ERROR: $e');
+      return null;
+    }
+  }
+
+  // --- Delete Item ---
   Future<String?> deleteItem(String categoryId, String itemId) async {
     try {
-      await _getItemsRef(categoryId).doc(itemId).delete();
+      await _supabase.from('items').delete().eq('id', itemId);
       return null;
     } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] deleteItem HATA: $e');
+      debugPrint('[DatabaseService] deleteItem ERROR: $e');
       return e.toString();
     }
   }
 
-  // Item Favori Durumunu Güncelle
-  Future<String?> toggleFavorite(String categoryId, String itemId, bool currentStatus) async {
-    try {
-      await _getItemsRef(categoryId).doc(itemId).update({
-        'isFavorite': !currentStatus,
-      });
-      return null;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] toggleFavorite HATA: $e');
-      return e.toString();
-    }
+  // --- Update Item Rating & Review ---
+  Future<void> updateItemRatingAndReview(String categoryId, String itemId, double rating, String? review) async {
+    await _supabase.from('items').update({'rating': rating, 'review': review}).eq('id', itemId);
   }
-  // Item �zleme Durumunu G�ncelle (watched / watching / watchlist)
-  Future<String?> updateItemStatus(String categoryId, String itemId, String newStatus) async {
-    try {
-      await _getItemsRef(categoryId).doc(itemId).update({
-        'watchStatus': newStatus,
-      });
-      return null;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[DatabaseService] updateItemStatus HATA: $e');
-      return e.toString();
-    }
+
+  // --- Update Item Status ---
+  Future<void> updateItemStatus(String categoryId, String itemId, String watchStatus) async {
+    await _supabase.from('items').update({'watch_status': watchStatus}).eq('id', itemId);
+  }
+
+  // --- Toggle Favorite ---
+  Future<void> toggleFavorite(String categoryId, String itemId, bool currentVal) async {
+    await _supabase.from('items').update({'is_favorite': !currentVal}).eq('id', itemId);
   }
 }

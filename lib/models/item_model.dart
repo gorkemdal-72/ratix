@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ItemModel {
   final String id;
   final String title;
@@ -18,6 +16,13 @@ class ItemModel {
   final String? author;      // Kitaplar için yazar, müzik için sanatçı
   final String? overview;    // Kısa açıklama
 
+  final String? review;      // Kullanıcının detaylı yorumu
+  final String? categoryIcon; // Diary için kategori emojisi
+  final String? categoryName; // Diary için kategori adı
+  final String? categoryId;   // Kategori ID'si
+  final int? runtime;         // Toplam izleme süresi (dakika)
+  final Map<String, dynamic>? seasonsData; // Dizi sezon ve bölüm seçim verileri
+
   ItemModel({
     required this.id,
     required this.title,
@@ -25,6 +30,10 @@ class ItemModel {
     this.rating = 0.0,
     this.isFavorite = false,
     required this.createdAt,
+    this.review,
+    this.categoryIcon,
+    this.categoryName,
+    this.categoryId,
     // Yeni alanlar
     this.posterUrl,
     this.year,
@@ -34,6 +43,8 @@ class ItemModel {
     this.watchStatus = 'watched',
     this.author,
     this.overview,
+    this.runtime,
+    this.seasonsData,
   });
 
   Map<String, dynamic> toMap() {
@@ -42,7 +53,7 @@ class ItemModel {
       'description': description,
       'rating': rating,
       'isFavorite': isFavorite,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.toIso8601String(),
       // Yeni alanlar
       'posterUrl': posterUrl,
       'year': year,
@@ -52,6 +63,10 @@ class ItemModel {
       'watchStatus': watchStatus,
       'author': author,
       'overview': overview,
+      'review': review,
+      'category_id': categoryId,
+      'runtime': runtime,
+      'seasons_data': seasonsData,
     };
   }
 
@@ -64,14 +79,14 @@ class ItemModel {
       parsedRating = double.tryParse(map['rating']) ?? 0.0;
     }
 
-    // 2. TARİH GÜVENLİĞİ: Hem Timestamp hem String kabul et
+    // 2. TARİH GÜVENLİĞİ: Hem ISO String hem DateTime kabul et
     DateTime parsedDate = DateTime.now();
     try {
-      final createdVal = map['createdAt'];
-      if (createdVal is Timestamp) {
-        parsedDate = createdVal.toDate();
-      } else if (createdVal is String) {
-        parsedDate = DateTime.parse(createdVal);
+      final createdVal = map['createdAt'] ?? map['created_at'];
+      if (createdVal is String) {
+        parsedDate = DateTime.parse(createdVal).toLocal();
+      } else if (createdVal is DateTime) {
+        parsedDate = createdVal.toLocal();
       }
     } catch (e) {
       parsedDate = DateTime.now();
@@ -86,22 +101,36 @@ class ItemModel {
       }
     } catch (_) {}
 
+    Map<String, dynamic>? parsedSeasonsData;
+    try {
+      final sData = map['seasons_data'] ?? map['seasonsData'];
+      if (sData is Map) {
+        parsedSeasonsData = Map<String, dynamic>.from(sData);
+      }
+    } catch (_) {}
+
     return ItemModel(
       id: docId,
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       rating: parsedRating,
-      isFavorite: map['isFavorite'] ?? false,
+      isFavorite: map['isFavorite'] ?? map['is_favorite'] ?? false,
       createdAt: parsedDate,
       // Yeni alanlar — null-safe
-      posterUrl: map['posterUrl'] as String?,
+      posterUrl: (map['posterUrl'] ?? map['poster_url']) as String?,
       year: map['year'] as int?,
-      externalId: map['externalId'] as String?,
-      mediaType: map['mediaType'] as String?,
+      externalId: (map['externalId'] ?? map['external_id']) as String?,
+      mediaType: (map['mediaType'] ?? map['media_type']) as String?,
       genres: parsedGenres,
-      watchStatus: map['watchStatus'] as String? ?? 'watched',
+      watchStatus: (map['watchStatus'] ?? map['watch_status']) as String? ?? 'watched',
       author: map['author'] as String?,
       overview: map['overview'] as String?,
+      review: map['review'] as String?,
+      categoryIcon: map['categories']?['icon'] as String?,
+      categoryName: map['categories']?['name'] as String?,
+      categoryId: map['category_id'] as String?,
+      runtime: map['runtime'] as int?,
+      seasonsData: parsedSeasonsData,
     );
   }
 
@@ -121,6 +150,12 @@ class ItemModel {
     String? watchStatus,
     String? author,
     String? overview,
+    String? review,
+    String? categoryIcon,
+    String? categoryName,
+    String? categoryId,
+    int? runtime,
+    Map<String, dynamic>? seasonsData,
   }) {
     return ItemModel(
       id: id ?? this.id,
@@ -137,6 +172,33 @@ class ItemModel {
       watchStatus: watchStatus ?? this.watchStatus,
       author: author ?? this.author,
       overview: overview ?? this.overview,
+      review: review ?? this.review,
+      categoryIcon: categoryIcon ?? this.categoryIcon,
+      categoryName: categoryName ?? this.categoryName,
+      categoryId: categoryId ?? this.categoryId,
+      runtime: runtime ?? this.runtime,
+      seasonsData: seasonsData ?? this.seasonsData,
     );
+  }
+
+  /// Sezon ve bölüm yardımcı getter'ları
+  int get selectedEpisodesCount => seasonsData?['selected_episodes_count'] as int? ?? 0;
+  int get totalEpisodesCount => seasonsData?['total_episodes'] as int? ?? 0;
+  bool get isAllSeasonsSelected => seasonsData?['all_selected'] == true;
+
+  String? get seasonsSummary {
+    if (mediaType != 'tv' || seasonsData == null) return null;
+    if (isAllSeasonsSelected) {
+      final total = totalEpisodesCount;
+      return total > 0 ? 'Tüm Dizi ($total Bölüm)' : 'Tüm Dizi';
+    }
+    final selCount = selectedEpisodesCount;
+    final total = totalEpisodesCount;
+    if (selCount > 0 && total > 0) {
+      return '$selCount / $total Bölüm';
+    } else if (selCount > 0) {
+      return '$selCount Bölüm';
+    }
+    return null;
   }
 }
