@@ -11,6 +11,7 @@ import 'follow_list_screen.dart';
 import 'fullscreen_avatar_screen.dart';
 import '../admin/admin_reports_screen.dart';
 import '../diary/diary_screen.dart';
+import '../../core/app_strings.dart';
 
 class SocialProfileScreen extends StatefulWidget {
   final String userId;
@@ -657,7 +658,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildStatColumn('Gönderi', _profile!.postsCount),
+                          _buildStatColumn(AppStrings.isEn ? 'Posts' : 'Gönderi', _profile!.postsCount),
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: () async {
@@ -670,7 +671,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                               ));
                               _loadProfile();
                             },
-                            child: _buildStatColumn('Takipçi', _profile!.followersCount),
+                            child: _buildStatColumn(AppStrings.followers, _profile!.followersCount),
                           ),
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
@@ -684,7 +685,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                               ));
                               _loadProfile();
                             },
-                            child: _buildStatColumn('Takip', _profile!.followingCount),
+                            child: _buildStatColumn(AppStrings.following, _profile!.followingCount),
                           ),
                         ],
                       ),
@@ -712,7 +713,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                                   foregroundColor: _isFollowing ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onPrimary,
                                   elevation: 0,
                                 ),
-                                child: Text(_isFollowing ? 'Takibi Bırak' : 'Takip Et'),
+                                child: Text(_isFollowing ? AppStrings.unfollow : AppStrings.follow),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -744,7 +745,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                                       }
                                     }
                                   },
-                                  child: const Text('Profili Düzenle'),
+                                  child: Text(AppStrings.editProfile),
                                 ),
                               ),
                               const SizedBox(width: 8),

@@ -114,6 +114,21 @@ class AuthService {
     }
   }
 
+  // Google ile Giriş Yap / Kayıt Ol
+  Future<String?> signInWithGoogle() async {
+    try {
+      await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : 'io.supabase.ratix://login-callback',
+      );
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   // Şifre Sıfırlama (Reset Password)
   Future<String?> resetPassword(String email) async {
     try {

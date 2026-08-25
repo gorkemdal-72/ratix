@@ -48,14 +48,12 @@ android {
 
     buildTypes {
         release {
-            // 3. ADIM: Yukarıdaki imza ayarını burada kullan
             signingConfig signingConfigs.release
             
-            // Kodları sıkıştırır ve gizler (APK boyutunu düşürür)
-            // NOT: R8 hatası verdiği için şimdilik false yapıldı.
-            minifyEnabled false
-            shrinkResources false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 Optimizasyonu: Kullanılmayan kodları ve kaynakları temizler, APK/AAB boyutunu küçültür ve bellek performansını artırır.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

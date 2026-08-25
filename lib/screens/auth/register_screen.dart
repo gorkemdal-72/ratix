@@ -86,6 +86,18 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     }
   }
 
+  void _googleLogin() async {
+    setState(() => _isLoading = true);
+    String? error = await _authService.signInWithGoogle();
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -111,9 +123,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       // İsim alanı
                       TextFormField(
                         controller: _nameController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: AppStrings.nameSurname,
-                          prefixIcon: Icon(Icons.person_outline),
+                          prefixIcon: const Icon(Icons.person_outline),
                         ),
                         validator: (val) => val!.isEmpty ? "İsim boş olamaz" : null,
                       ),
@@ -139,9 +151,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: AppStrings.email,
-                          prefixIcon: Icon(Icons.email_outlined),
+                          prefixIcon: const Icon(Icons.email_outlined),
                         ),
                         validator: (val) => val!.contains('@') ? null : "Geçerli bir e-posta girin",
                       ),
@@ -171,6 +183,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
                       // Kayıt Butonu
                       _buildRegisterButton(),
+
+                      const SizedBox(height: AppTheme.spaceMd),
+
+                      // ─── GOOGLE GİRİŞ BUTONU ───
+                      _buildGoogleLoginButton(),
 
                       const SizedBox(height: AppTheme.spaceMd),
 
@@ -279,9 +296,38 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                 height: 52,
                 child: ElevatedButton(
                   onPressed: _register,
-                  child: const Text(AppStrings.register),
+                  child: Text(AppStrings.register),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleLoginButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: _isLoading ? null : _googleLogin,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.login),
+            const SizedBox(width: 8),
+            Text(
+              'Google ile Devam Et',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

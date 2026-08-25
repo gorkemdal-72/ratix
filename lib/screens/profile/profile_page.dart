@@ -21,13 +21,13 @@ class _ProfilePageState extends State<ProfilePage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(AppStrings.logout),
-        content: const Text(AppStrings.logoutConfirm),
+        title: Text(AppStrings.logout),
+        content: Text(AppStrings.logoutConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text(AppStrings.cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(AppStrings.logout, style: TextStyle(color: AppTheme.danger)),
+            child: Text(AppStrings.logout, style: const TextStyle(color: AppTheme.danger)),
           ),
         ],
       ),
@@ -52,7 +52,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.profileTitle),
+        title: Text(AppStrings.profileTitle),
         actions: [
           IconButton(
             onPressed: _signOut,
@@ -136,7 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
               child: OutlinedButton.icon(
                 onPressed: _signOut,
                 icon: const Icon(Icons.logout_rounded),
-                label: const Text(AppStrings.logout),
+                label: Text(AppStrings.logout),
               ),
             ),
 

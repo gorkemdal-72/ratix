@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/notification_service.dart';
 import '../../models/notification_model.dart';
+import '../../core/app_strings.dart';
 import 'package:intl/intl.dart';
 import 'social_profile_screen.dart';
 import 'post_detail_screen.dart';
@@ -40,12 +41,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bildirimler'),
+        title: Text(AppStrings.notifications),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
-              ? const Center(child: Text('Bildiriminiz bulunmuyor.'))
+              ? Center(child: Text(AppStrings.isEn ? 'No notifications.' : 'Bildiriminiz bulunmuyor.'))
               : RefreshIndicator(
                   onRefresh: _loadNotifications,
                   child: ListView.separated(
@@ -59,82 +60,90 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       IconData icon = Icons.notifications;
                       Color iconColor = Colors.grey;
 
+                      final isEn = AppStrings.isEn;
+
                       switch (n.type) {
                         case 'follow':
-                          text = 'seni takip etmeye başladı.';
+                          text = isEn ? 'started following you.' : 'seni takip etmeye başladı.';
                           icon = Icons.person_add;
                           iconColor = Colors.blue;
                           break;
                         case 'post_like':
-                          text = n.postItemTitle != null ? "'${n.postItemTitle}' paylaşımını beğendi." : 'gönderini beğendi.';
+                          text = n.postItemTitle != null
+                              ? (isEn ? "liked your post '${n.postItemTitle}'." : "'${n.postItemTitle}' paylaşımını beğendi.")
+                              : (isEn ? 'liked your post.' : 'gönderini beğendi.');
                           icon = Icons.favorite;
                           iconColor = Colors.red;
                           break;
                         case 'comment_like':
                           final cPreview = n.commentContent != null ? "'${n.commentContent!.length > 30 ? '${n.commentContent!.substring(0, 30)}...' : n.commentContent}' " : '';
-                          text = '${cPreview}yorumunu beğendi.';
+                          text = isEn ? 'liked your comment $cPreview.' : '${cPreview}yorumunu beğendi.';
                           icon = Icons.favorite;
                           iconColor = Colors.red;
                           break;
                         case 'comment':
-                          text = n.postItemTitle != null ? "'${n.postItemTitle}' paylaşımına yorum yaptı." : 'gönderine yorum yaptı.';
+                          text = n.postItemTitle != null
+                              ? (isEn ? "commented on your post '${n.postItemTitle}'." : "'${n.postItemTitle}' paylaşımına yorum yaptı.")
+                              : (isEn ? 'liked your post.' : 'gönderine yorum yaptı.');
                           icon = Icons.comment;
                           iconColor = Colors.green;
                           break;
                         case 'reply':
                           final cPreview2 = n.commentContent != null ? "'${n.commentContent!.length > 30 ? '${n.commentContent!.substring(0, 30)}...' : n.commentContent}' " : '';
-                          text = '${cPreview2}yorumuna yanıt verdi.';
+                          text = isEn ? 'replied to your comment $cPreview2.' : '${cPreview2}yorumuna yanıt verdi.';
                           icon = Icons.reply;
                           iconColor = Colors.orange;
                           break;
                         case 'warning':
-                          text = 'sana bir uyarı gönderdi.';
+                          text = isEn ? 'sent you a warning.' : 'sana bir uyarı gönderdi.';
                           icon = Icons.warning_amber_rounded;
                           iconColor = Colors.orange;
                           break;
                         case 'admin_grant':
-                          text = 'seni admin yaptı.';
+                          text = isEn ? 'granted you admin role.' : 'seni admin yaptı.';
                           icon = Icons.shield;
                           iconColor = Colors.blue;
                           break;
                         case 'admin_revoke':
-                          text = 'admin yetkilerini aldı.';
+                          text = isEn ? 'revoked your admin role.' : 'admin yetkilerini aldı.';
                           icon = Icons.remove_moderator;
                           iconColor = Colors.red;
                           break;
                         case 'mute':
-                          text = 'seni belirli bir süreliğine susturdu.';
+                          text = isEn ? 'muted your account temporarily.' : 'seni belirli bir süreliğine susturdu.';
                           icon = Icons.volume_off;
                           iconColor = Colors.redAccent;
                           break;
                         case 'ban':
-                          text = 'hesabını kalıcı olarak yasakladı.';
+                          text = isEn ? 'banned your account permanently.' : 'hesabını kalıcı olarak yasakladı.';
                           icon = Icons.block;
                           iconColor = Colors.red;
                           break;
                         case 'report_resolved':
-                          text = 'şikayetini inceledi ve gerekli aksiyonu aldı. Teşekkürler!';
+                          text = isEn ? 'reviewed your report and took necessary actions. Thanks!' : 'şikayetini inceledi ve gerekli aksiyonu aldı. Teşekkürler!';
                           icon = Icons.check_circle;
                           iconColor = Colors.green;
                           break;
                         case 'report_dismissed':
-                          text = 'şikayetini inceledi ancak ihlal tespit etmedi.';
+                          text = isEn ? 'reviewed your report but found no violation.' : 'şikayetini inceledi ancak ihlal tespit etmedi.';
                           icon = Icons.info_outline;
                           iconColor = Colors.grey;
                           break;
                         case 'system':
-                          text = 'sana bir sistem mesajı gönderdi.';
+                          text = isEn ? 'sent you a system message.' : 'sana bir sistem mesajı gönderdi.';
                           icon = Icons.campaign;
                           iconColor = Colors.blueAccent;
                           break;
                         case 'new_report':
-                          text = 'yeni bir şikayet oluşturdu (Admin Bildirimi).';
+                          text = isEn ? 'submitted a new report (Admin).' : 'yeni bir şikayet oluşturdu (Admin Bildirimi).';
                           icon = Icons.report_problem;
                           iconColor = Colors.orange;
                           break;
                       }
 
                       Widget? subtitleWidget;
+                      final dateFormat = DateFormat.yMMMd(isEn ? 'en_US' : 'tr_TR').add_Hm();
+
                       if (n.type == 'comment' || n.type == 'reply') {
                         final previewContent = n.commentContent ?? '';
                         if (previewContent.isNotEmpty) {
@@ -148,15 +157,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).textTheme.bodyMedium?.color),
                               ),
                               const SizedBox(height: 4),
-                              Text(DateFormat.yMMMd('tr_TR').add_Hm().format(n.createdAt)),
+                              Text(dateFormat.format(n.createdAt)),
                             ],
                           );
                         }
                       }
                       
-                      subtitleWidget ??= Text(DateFormat.yMMMd('tr_TR').add_Hm().format(n.createdAt));
+                      subtitleWidget ??= Text(dateFormat.format(n.createdAt));
 
-                       return ListTile(
+                      return ListTile(
                         leading: GestureDetector(
                           onTap: () {
                             if (sender != null) {
@@ -173,7 +182,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         title: Text.rich(
                           TextSpan(
                             children: [
-                              TextSpan(text: sender?.displayName ?? 'Birisi', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              TextSpan(text: sender?.displayName ?? (isEn ? 'Someone' : 'Birisi'), style: const TextStyle(fontWeight: FontWeight.bold)),
                               TextSpan(text: ' $text'),
                             ],
                           ),

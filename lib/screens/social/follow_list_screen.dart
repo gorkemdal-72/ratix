@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/social_service.dart';
 import '../../models/user_model.dart';
+import '../../core/app_strings.dart';
 import 'social_profile_screen.dart';
 
 class FollowListScreen extends StatefulWidget {
@@ -93,7 +94,6 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
         await service.followUser(user.id);
       }
     } catch (_) {
-      // Revert if error
       if (mounted) {
         setState(() {
           if (isFollowing) {
@@ -113,9 +113,9 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
         title: Text('@${widget.username}'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Takipçiler'),
-            Tab(text: 'Takip Edilenler'),
+          tabs: [
+            Tab(text: AppStrings.followers),
+            Tab(text: AppStrings.following),
           ],
         ),
       ),
@@ -133,10 +133,10 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
 
   Widget _buildUserList(List<UserModel> users) {
     if (users.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text('Gösterilecek kullanıcı bulunamadı.'),
+          padding: const EdgeInsets.all(32),
+          child: Text(AppStrings.noSearchResult),
         ),
       );
     }
@@ -166,7 +166,7 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
               ),
             ),
             title: Text(
-              u.displayName ?? 'İsimsiz',
+              u.displayName ?? AppStrings.anonymousUser,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text('@${u.username ?? 'user'}'),
@@ -187,7 +187,7 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                       child: Text(
-                        isFollowing ? 'Takibi Bırak' : 'Takip Et',
+                        isFollowing ? AppStrings.unfollow : AppStrings.follow,
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'widgets/update_checker.dart';
@@ -12,6 +12,7 @@ import 'services/social_service.dart';
 import 'services/admin_service.dart';
 import 'services/notification_service.dart';
 import 'providers/theme_provider.dart';
+import 'providers/locale_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/main_layout.dart';
@@ -49,21 +50,24 @@ void main() async {
     }
   });
   
-  // TÃ¼rkÃ§e tarih formatÄ±nÄ± baÅŸlat
+  // Tarih formatlarını başlat
   await initializeDateFormatting('tr_TR', null);
+  await initializeDateFormatting('en_US', null);
 
-  // Tema tercihini oku
+  // Tercihleri oku
   final prefs = await SharedPreferences.getInstance();
   final bool isDark = prefs.getBool('isDarkMode') ?? false;
+  final String? savedLang = prefs.getString('app_language');
   final ThemeMode initialTheme = isDark ? ThemeMode.dark : ThemeMode.light;
 
-  runApp(RatixApp(initialTheme: initialTheme));
+  runApp(RatixApp(initialTheme: initialTheme, initialLanguageCode: savedLang));
 }
 
 class RatixApp extends StatelessWidget {
   final ThemeMode initialTheme;
+  final String? initialLanguageCode;
 
-  const RatixApp({super.key, required this.initialTheme});
+  const RatixApp({super.key, required this.initialTheme, this.initialLanguageCode});
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +78,7 @@ class RatixApp extends StatelessWidget {
         Provider<AdminService>(create: (_) => AdminService()),
         Provider<NotificationService>(create: (_) => NotificationService()),
         ChangeNotifierProvider(create: (_) => ThemeProvider(initialTheme: initialTheme)),
+        ChangeNotifierProvider(create: (_) => LocaleProvider(initialLanguageCode: initialLanguageCode)),
       ],
       child: const RatixMaterialApp(),
     );
@@ -86,16 +91,18 @@ class RatixMaterialApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final localeProvider = Provider.of<LocaleProvider>(context);
 
     return MaterialApp(
       title: 'Ratix',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       
-      // -- TÜRKÇE DİL DESTEĞİ --
-      locale: const Locale('tr', 'TR'),
+      // -- DİL DESTEĞİ --
+      locale: localeProvider.locale,
       supportedLocales: const [
         Locale('tr', 'TR'),
+        Locale('en', 'US'),
       ],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -130,7 +137,7 @@ class AuthWrapper extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    "âœ¦",
+                    "✦",
                     style: TextStyle(
                       fontSize: 48,
                       color: Theme.of(context).colorScheme.primary,
@@ -144,7 +151,7 @@ class AuthWrapper extends StatelessWidget {
                       strokeWidth: 3,
                       color: Theme.of(context).colorScheme.primary,
                     ),
-                  ),
+                  ),  
                 ],
               ),
             ),
@@ -152,8 +159,6 @@ class AuthWrapper extends StatelessWidget {
         }
         
         if (snapshot.hasData && snapshot.data != null) {
-          // Supabase'de e-posta onaylanmÄ±ÅŸ mÄ± kontrolÃ¼ (isteÄŸe baÄŸlÄ±, authProvider ayarÄ±na gÃ¶re)
-          // Åžimdilik oturum aÃ§Ä±lmÄ±ÅŸsa direkt ana sayfaya alalÄ±m, Ã§Ã¼nkÃ¼ Supabase zaten onay olmadan oturum vermez.
           return const MainLayout();
         }
         

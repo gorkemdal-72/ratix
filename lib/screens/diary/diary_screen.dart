@@ -3,6 +3,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../services/diary_service.dart';
 import '../../models/item_model.dart';
 import '../../core/app_theme.dart';
+import '../../core/app_strings.dart';
 
 class DiaryScreen extends StatefulWidget {
   final String? userId;
@@ -42,7 +43,6 @@ class _DiaryScreenState extends State<DiaryScreen> {
   }
 
   List<ItemModel> _getEventsForDay(DateTime day) {
-    // day is in UTC from table_calendar
     final normalized = DateTime.utc(day.year, day.month, day.day);
     return _events[normalized] ?? [];
   }
@@ -53,7 +53,9 @@ class _DiaryScreenState extends State<DiaryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.username != null ? '@${widget.username} Günlüğü' : 'Günlük'),
+        title: Text(widget.username != null
+            ? (AppStrings.isEn ? '@${widget.username}\'s Diary' : '@${widget.username} Günlüğü')
+            : AppStrings.diaryTitle),
         centerTitle: true,
       ),
       body: Column(
@@ -64,12 +66,18 @@ class _DiaryScreenState extends State<DiaryScreen> {
             focusedDay: _focusedDay,
             calendarFormat: _calendarFormat,
             startingDayOfWeek: StartingDayOfWeek.monday,
-            availableCalendarFormats: const {
-              CalendarFormat.month: 'Ay',
-              CalendarFormat.twoWeeks: '2 Hafta',
-              CalendarFormat.week: 'Hafta',
-            },
-            locale: 'tr_TR',
+            availableCalendarFormats: AppStrings.isEn
+                ? const {
+                    CalendarFormat.month: 'Month',
+                    CalendarFormat.twoWeeks: '2 Weeks',
+                    CalendarFormat.week: 'Week',
+                  }
+                : const {
+                    CalendarFormat.month: 'Ay',
+                    CalendarFormat.twoWeeks: '2 Hafta',
+                    CalendarFormat.week: 'Hafta',
+                  },
+            locale: AppStrings.isEn ? 'en_US' : 'tr_TR',
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
             onDaySelected: (selectedDay, focusedDay) {
               if (!isSameDay(_selectedDay, selectedDay)) {
@@ -112,7 +120,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
               child: selectedEvents.isEmpty
                   ? Center(
                       child: Text(
-                        'Bu güne ait bir kayıt yok.',
+                        AppStrings.isEn ? 'No records for this day.' : 'Bu güne ait bir kayıt yok.',
                         style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
                       ),
                     )
@@ -189,7 +197,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
                 const SizedBox(height: 4),
                 if (item.rating > 0)
                   Text(
-                    'Puan: ${item.rating}',
+                    '${AppStrings.rating}: ${item.rating}',
                     style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
                   ),
                 if (item.review != null && item.review!.isNotEmpty) ...[

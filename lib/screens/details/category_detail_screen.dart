@@ -62,9 +62,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   ];
 
   List<String> get _statusOptions {
-    final t = widget.category.categoryType;
-    final opts = [t.status1Label, t.status3Label];
-    if (t.status2Label != null) opts.insert(1, t.status2Label!);
+    final cat = widget.category;
+    final opts = [cat.status1Label, cat.status3Label];
+    if (cat.status2Label != null) opts.insert(1, cat.status2Label!);
     return opts;
   }
 
@@ -172,7 +172,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text(AppStrings.cancel),
+                child: Text(AppStrings.cancel),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -185,6 +185,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                       categoryType: widget.category.categoryType,
                       ratingType: widget.category.ratingType,
                       parentId: widget.category.id,
+                      customStatus1: widget.category.customStatus1,
+                      customStatus2: widget.category.customStatus2,
+                      customStatus3: widget.category.customStatus3,
                     );
                     Navigator.pop(ctx);
                     await _dbService.addCategory(subCat);
@@ -267,7 +270,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                     );
                   }
                 },
-                child: const Text(AppStrings.delete, style: TextStyle(color: AppTheme.danger)),
+                child: Text(AppStrings.delete, style: const TextStyle(color: AppTheme.danger)),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -282,7 +285,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                     }
                   }
                 },
-                child: const Text(AppStrings.save),
+                child: Text(AppStrings.save),
               ),
             ],
           );
@@ -375,7 +378,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         _buildSubCategoryBar(),
         Expanded(
           child: StreamBuilder<List<ItemModel>>(
-            stream: _dbService.getItemsStream(_activeCategoryId),
+            stream: _selectedSubCategory != null
+                ? _dbService.getItemsStream(_selectedSubCategory!.id)
+                : _dbService.getMainCategoryItemsStream(widget.category.id),
             builder: (ctx, snap) {
               if (!snap.hasData && snap.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 3));
               if (!snap.hasData) return _emptyState();
@@ -418,16 +423,16 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             ? _showSearchDialog(context)
             : _showManualAddDialog(context),
         icon: const Icon(Icons.add_rounded),
-        label: const Text(AppStrings.addItem),
+        label: Text(AppStrings.addItem),
       ),
     );
   }
 
   String _statusLabelFor(ItemModel item) {
-    final t = widget.category.categoryType;
-    if (item.watchStatus == 'watching') return t.status2Label ?? t.status1Label;
-    if (item.watchStatus == 'watchlist') return t.status3Label;
-    return t.status1Label;
+    final cat = widget.category;
+    if (item.watchStatus == 'watching') return cat.status2Label ?? cat.status1Label;
+    if (item.watchStatus == 'watchlist') return cat.status3Label;
+    return cat.status1Label;
   }
 
   Widget _buildStatusChips() {
@@ -450,10 +455,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     // Geçmişte eklenen ve süresi eksik olan içeriklerin sürelerini otomatik olarak TMDB'den çekip DB'ye doldur
     _dbService.checkAndBackfillRuntimes(items);
 
-    // Sadece "izlendi" olanların süresini topla
-    final watchedItems = items.where((i) => i.watchStatus == 'watched');
+    // "izlendi" olanların ve dizi/anime olup "izleniyor" olanların izlenen kısımlarının süresini topla
+    final validItems = items.where((i) => i.watchStatus == 'watched' || i.watchStatus == 'watching');
     int totalMinutes = 0;
-    for (var i in watchedItems) {
+    for (var i in validItems) {
       if (i.runtime != null) {
         totalMinutes += i.runtime!;
       }
@@ -683,6 +688,14 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    Text(
+                      '${AppStrings.isEn ? 'Added' : 'Eklendi'}: ${item.createdAt.day.toString().padLeft(2, '0')}.${item.createdAt.month.toString().padLeft(2, '0')}.${item.createdAt.year}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -711,14 +724,14 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Widget _statusBadge(ItemModel item) {
-    final t = widget.category.categoryType;
-    String label = t.status1Label;
+    final cat = widget.category;
+    String label = cat.status1Label;
     Color color = AppTheme.success;
     if (item.watchStatus == 'watching') {
-      label = t.status2Label ?? t.status1Label;
+      label = cat.status2Label ?? cat.status1Label;
       color = AppTheme.warning;
     } else if (item.watchStatus == 'watchlist') {
-      label = t.status3Label; 
+      label = cat.status3Label; 
       color = Colors.grey;
     }
     return Container(
@@ -729,11 +742,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   void _showStatusDialog(BuildContext context, ItemModel item) {
+    final cat = widget.category;
     final opts = [
-      {'val': 'watched', 'label': widget.category.categoryType.status1Label, 'icon': widget.category.categoryType.status1Emoji},
-      if (widget.category.categoryType.status2Label != null)
-        {'val': 'watching', 'label': widget.category.categoryType.status2Label!, 'icon': widget.category.categoryType.status2Emoji},
-      {'val': 'watchlist', 'label': widget.category.categoryType.status3Label, 'icon': widget.category.categoryType.status3Emoji},
+      {'val': 'watched', 'label': cat.status1Label, 'icon': cat.categoryType.status1Emoji},
+      if (cat.status2Label != null)
+        {'val': 'watching', 'label': cat.status2Label!, 'icon': cat.categoryType.status2Emoji},
+      {'val': 'watchlist', 'label': cat.status3Label, 'icon': cat.categoryType.status3Emoji},
     ];
 
     showModalBottomSheet(
@@ -742,7 +756,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text(AppStrings.changeStatus, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+            Padding(padding: const EdgeInsets.all(16), child: Text(AppStrings.changeStatus, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
             ...opts.map((o) => ListTile(
               leading: Text(o['icon'] as String, style: const TextStyle(fontSize: 24)),
               title: Text(o['label'] as String),
@@ -828,14 +842,14 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
           ElevatedButton(
             onPressed: () {
               final reviewText = reviewCtrl.text.trim().isEmpty ? null : reviewCtrl.text.trim();
               _dbService.updateItemRatingAndReview(widget.category.id, item.id, current, reviewText);
               Navigator.pop(ctx);
             },
-            child: const Text(AppStrings.updateItem),
+            child: Text(AppStrings.updateItem),
           ),
         ],
       )),
@@ -901,13 +915,13 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(AppStrings.deleteConfirm),
-        content: const Text(AppStrings.deleteItemMsg),
+        title: Text(AppStrings.deleteConfirm),
+        content: Text(AppStrings.deleteItemMsg),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
           TextButton(
             onPressed: () { onDelete(); Navigator.pop(ctx); },
-            child: const Text(AppStrings.delete, style: TextStyle(color: AppTheme.danger)),
+            child: Text(AppStrings.delete, style: const TextStyle(color: AppTheme.danger)),
           ),
         ],
       ),
@@ -925,12 +939,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setState) => AlertDialog(
-        title: const Text(AppStrings.addItem),
+        title: Text(AppStrings.addItem),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: AppStrings.itemTitle, prefixIcon: Icon(Icons.title_rounded))),
+              TextField(controller: titleCtrl, decoration: InputDecoration(labelText: AppStrings.itemTitle, prefixIcon: const Icon(Icons.title_rounded))),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: () async {
@@ -977,7 +991,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: isUploading ? null : () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+          TextButton(onPressed: isUploading ? null : () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
           ElevatedButton(
             onPressed: isUploading ? null : () async {
               if (titleCtrl.text.isNotEmpty) {
@@ -1025,7 +1039,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             },
             child: isUploading 
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                : const Text(AppStrings.saveItem),
+                : Text(AppStrings.saveItem),
           ),
         ],
       )),
@@ -1085,15 +1099,25 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
   void _showApiAddDialog(BuildContext context, SearchResult r, {Map<String, dynamic>? seasonRes}) {
     double currentRating = widget.category.ratingType == RatingType.stars5 ? 3.0 : 5.0;
-    final t = widget.category.categoryType;
-    String selectedStatus = 'watched'; // Default
+    final bool isTv = r.mediaType == 'tv' || widget.category.categoryType == CategoryType.tvShow;
+    bool isAllSelected = true;
+    int selectedEpCount = -1;
+    if (isTv && seasonRes != null) {
+      isAllSelected = seasonRes['all_selected'] == true;
+      selectedEpCount = seasonRes['selected_episodes_count'] ?? 0;
+    }
+    String selectedStatus = (isTv && !isAllSelected) ? 'watching' : 'watched';
+    if (isTv && selectedEpCount == 0) {
+      selectedStatus = 'watchlist';
+    }
     final reviewCtrl = TextEditingController();
     Map<String, dynamic>? currentSeasonRes = seasonRes;
 
+    final cat = widget.category;
     final statusOpts = [
-      {'val': 'watched', 'label': t.status1Label},
-      if (t.status2Label != null) {'val': 'watching', 'label': t.status2Label!},
-      {'val': 'watchlist', 'label': t.status3Label},
+      {'val': 'watched', 'label': cat.status1Label},
+      if (cat.status2Label != null) {'val': 'watching', 'label': cat.status2Label!},
+      {'val': 'watchlist', 'label': cat.status3Label},
     ];
 
     bool isSaving = false;
@@ -1151,7 +1175,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                             initialSeasonsData: currentSeasonRes,
                           );
                           if (updatedRes != null) {
-                            setState(() => currentSeasonRes = updatedRes);
+                            setState(() {
+                              currentSeasonRes = updatedRes;
+                              final bool allSel = updatedRes['all_selected'] == true;
+                              final int count = updatedRes['selected_episodes_count'] ?? 0;
+                              selectedStatus = allSel ? 'watched' : (count == 0 ? 'watchlist' : 'watching');
+                            });
                           }
                         },
                         child: const Text('Düzenle', style: TextStyle(fontSize: 12)),
@@ -1163,7 +1192,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
               ],
               DropdownButtonFormField<String>(
                 initialValue: selectedStatus,
-                decoration: const InputDecoration(labelText: AppStrings.changeStatus),
+                decoration: InputDecoration(labelText: AppStrings.changeStatus),
                 items: statusOpts.map((o) => DropdownMenuItem(value: o['val'], child: Text(o['label']!))).toList(),
                 onChanged: (v) => setState(() => selectedStatus = v!),
               ),
@@ -1184,7 +1213,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+          TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
           ElevatedButton(
             onPressed: isSaving ? null : () async {
               setState(() => isSaving = true);
@@ -1214,7 +1243,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 _showQuickShareDialog(context, savedItem);
               }
             },
-            child: isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text(AppStrings.saveItem),
+            child: isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : Text(AppStrings.saveItem),
           ),
         ],
       )),
@@ -1376,7 +1405,7 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
                     ),
                   ),
                 ),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text(AppStrings.cancel)),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(AppStrings.cancel)),
               ],
             ),
           ),
@@ -1409,14 +1438,14 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(AppStrings.noApiResult),
+                    Text(AppStrings.noApiResult),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context, 'MANUAL');
                       },
                       icon: const Icon(Icons.edit_note_rounded),
-                      label: const Text(AppStrings.addManually),
+                      label: Text(AppStrings.addManually),
                     ),
                   ],
                 ),

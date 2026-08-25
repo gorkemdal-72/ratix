@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/app_strings.dart';
 import 'social_profile_screen.dart';
 
 class UserSearchScreen extends StatefulWidget {
@@ -69,8 +70,8 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         title: TextField(
           controller: _searchController,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Kullanıcı adı ara...',
+          decoration: InputDecoration(
+            hintText: AppStrings.searchUsers,
             border: InputBorder.none,
           ),
           onChanged: _searchUsers,
@@ -88,7 +89,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : _results.isEmpty && _searchController.text.isNotEmpty
-              ? const Center(child: Text('Kullanıcı bulunamadı.'))
+              ? Center(child: Text(AppStrings.noSearchResult))
               : ListView.builder(
                   itemCount: _results.length,
                   itemBuilder: (context, index) {
@@ -101,7 +102,6 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                       title: Text(user['username'] ?? 'user', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(user['display_name'] ?? ''),
                       onTap: () {
-                        // Profile git
                         Navigator.push(context, MaterialPageRoute(
                           builder: (_) => SocialProfileScreen(userId: user['id']),
                         ));

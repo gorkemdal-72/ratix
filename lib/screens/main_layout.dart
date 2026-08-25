@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../core/app_strings.dart';
 import '../services/notification_service.dart';
 import 'home/home_screen.dart';
 import 'social/social_feed_screen.dart';
@@ -90,20 +91,20 @@ class _MainLayoutState extends State<MainLayout> {
           }
         },
         destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.category_outlined),
-            selectedIcon: Icon(Icons.category),
-            label: 'Listelerim',
+          NavigationDestination(
+            icon: const Icon(Icons.category_outlined),
+            selectedIcon: const Icon(Icons.category),
+            label: AppStrings.myCategories,
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.public_outlined),
-            selectedIcon: Icon(Icons.public),
-            label: 'Keşfet',
+          NavigationDestination(
+            icon: const Icon(Icons.public_outlined),
+            selectedIcon: const Icon(Icons.public),
+            label: AppStrings.explore,
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Günlük',
+          NavigationDestination(
+            icon: const Icon(Icons.calendar_month_outlined),
+            selectedIcon: const Icon(Icons.calendar_month),
+            label: AppStrings.diaryTitle,
           ),
           NavigationDestination(
             icon: Badge(
@@ -112,12 +113,12 @@ class _MainLayoutState extends State<MainLayout> {
               child: const Icon(Icons.notifications_outlined),
             ),
             selectedIcon: const Icon(Icons.notifications),
-            label: 'Bildirimler',
+            label: AppStrings.notifications,
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profil',
+          NavigationDestination(
+            icon: const Icon(Icons.person_outline),
+            selectedIcon: const Icon(Icons.person),
+            label: AppStrings.profileTitle,
           ),
         ],
       ),

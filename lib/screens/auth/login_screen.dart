@@ -62,6 +62,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // Başarılı ise stream otomatik yönlendirecek
   }
 
+  void _googleLogin() async {
+    setState(() => _isLoading = true);
+    String? error = await _authService.signInWithGoogle();
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
   void _forgotPassword() async {
     final emailCtrl = TextEditingController(text: _emailController.text.trim());
     final confirmed = await showDialog<bool>(
@@ -133,6 +145,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                 // ─── GİRİŞ BUTONU ───
                 _buildLoginButton(),
+
+                const SizedBox(height: AppTheme.spaceMd),
+
+                // ─── GOOGLE GİRİŞ BUTONU ───
+                _buildGoogleLoginButton(),
 
                 const SizedBox(height: AppTheme.spaceMd),
 
@@ -229,9 +246,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         TextField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: AppStrings.email,
-            prefixIcon: Icon(Icons.email_outlined),
+            prefixIcon: const Icon(Icons.email_outlined),
           ),
         ),
         const SizedBox(height: AppTheme.spaceMd),
@@ -274,9 +291,38 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 height: 52,
                 child: ElevatedButton(
                   onPressed: _login,
-                  child: const Text(AppStrings.login),
+                  child: Text(AppStrings.login),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleLoginButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: _isLoading ? null : _googleLogin,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.login),
+            const SizedBox(width: 8),
+            Text(
+              'Google ile Devam Et',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/app_strings.dart';
 import '../../services/social_service.dart';
 import '../../services/admin_service.dart';
 import '../../models/post_model.dart';
@@ -29,7 +30,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sosyal Akış'),
+        title: Text(AppStrings.socialFeedTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_search),
@@ -42,9 +43,9 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> with SingleTickerPr
         ],
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Takip Ettiklerin'),
-            Tab(text: 'Keşfet'),
+          tabs: [
+            Tab(text: AppStrings.following),
+            Tab(text: AppStrings.explore),
           ],
         ),
       ),
@@ -66,7 +67,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> with SingleTickerPr
         onPressed: () async {
           final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostScreen()));
           if (result == true) {
-            // İsteğe bağlı olarak burada listeyi yeniletebiliriz.
+            // Refresh feed if needed
           }
         },
         child: const Icon(Icons.add_comment),
@@ -114,7 +115,7 @@ class _FeedTabState extends State<_FeedTab> {
 
     if (_posts.isEmpty) {
       return Center(
-        child: Text(widget.isDiscover ? 'Henüz gönderi yok.' : 'Takip ettiğiniz kişilerin gönderileri burada görünür.'),
+        child: Text(widget.isDiscover ? AppStrings.noPostsYet : AppStrings.followingPostsSub),
       );
     }
 

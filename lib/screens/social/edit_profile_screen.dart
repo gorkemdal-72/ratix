@@ -24,7 +24,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   File? _selectedImageFile;
-  String _diaryVisibility = 'followers_only';
 
   @override
   void initState() {
@@ -33,7 +32,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _usernameCtrl = TextEditingController(text: widget.profile.username);
     _bioCtrl = TextEditingController(text: widget.profile.bio);
     _badgeEmojiCtrl = TextEditingController(text: widget.profile.badgeEmoji ?? '');
-    _diaryVisibility = widget.profile.diaryVisibility;
   }
 
   @override
@@ -115,7 +113,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'username': newUsername,
         'bio': newBio,
         'avatar_url': finalAvatarUrl,
-        'diary_visibility': _diaryVisibility,
       };
 
       if (widget.profile.hasAdminPrivileges) {
@@ -212,20 +209,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       prefixIcon: Icon(Icons.info_outline),
                     ),
                     maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _diaryVisibility,
-                    decoration: const InputDecoration(
-                      labelText: 'Günlük Gizliliği',
-                      prefixIcon: Icon(Icons.visibility),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'public', child: Text('Herkese Açık')),
-                      DropdownMenuItem(value: 'followers_only', child: Text('Sadece Takipçiler')),
-                      DropdownMenuItem(value: 'private', child: Text('Sadece Ben')),
-                    ],
-                    onChanged: (v) => setState(() => _diaryVisibility = v!),
                   ),
                   if (widget.profile.hasAdminPrivileges) ...[
                     const SizedBox(height: 16),

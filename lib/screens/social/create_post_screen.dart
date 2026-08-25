@@ -5,6 +5,7 @@ import '../../services/social_service.dart';
 import '../../models/item_model.dart';
 import '../../models/category_model.dart';
 import '../../services/database_service.dart';
+import '../../core/app_strings.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final ItemModel? preSelectedItem;
@@ -130,13 +131,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Yeni Gönderi'),
+        title: Text(AppStrings.newPost),
         actions: [
           TextButton(
             onPressed: _isSubmitting ? null : _submit,
             child: _isSubmitting
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Paylaş', style: TextStyle(fontWeight: FontWeight.bold)),
+                : Text(AppStrings.share, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -148,8 +149,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             TextField(
               controller: _contentController,
               maxLines: 5,
-              decoration: const InputDecoration(
-                hintText: 'Ne hakkında konuşmak istersin?',
+              decoration: InputDecoration(
+                hintText: AppStrings.postPlaceholder,
                 border: InputBorder.none,
               ),
             ),
@@ -158,15 +159,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               children: [
                 const Icon(Icons.visibility, size: 20, color: Colors.grey),
                 const SizedBox(width: 8),
-                const Text('Kimler Görebilir: ', style: TextStyle(color: Colors.grey)),
+                Text(AppStrings.whoCanSee, style: const TextStyle(color: Colors.grey)),
                 Expanded(
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _visibility,
                       isDense: true,
-                      items: const [
-                        DropdownMenuItem(value: 'public', child: Text('🌍 Herkese Açık')),
-                        DropdownMenuItem(value: 'followers_only', child: Text('👥 Sadece Takipçilerim')),
+                      items: [
+                        DropdownMenuItem(value: 'public', child: Text(AppStrings.publicVisibility)),
+                        DropdownMenuItem(value: 'followers_only', child: Text(AppStrings.followersOnlyVisibility)),
                       ],
                       onChanged: (val) {
                         if (val != null) setState(() => _visibility = val);
@@ -181,7 +182,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.add_link),
-              title: Text(_selectedItem == null ? 'Bir Film / Dizi / Kitap Ekle' : 'Seçili Ögeyi Değiştir'),
+              title: Text(_selectedItem == null ? AppStrings.attachMedia : AppStrings.changeMedia),
               trailing: _selectedItem != null
                   ? IconButton(
                       icon: const Icon(Icons.close),
@@ -222,7 +223,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         children: [
                           Text(_selectedItem!.title, style: const TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Puan: ${_selectedItem!.rating}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+                          Text('${AppStrings.rating}: ${_selectedItem!.rating}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -280,9 +281,9 @@ class _ItemSelectionBottomSheetState extends State<_ItemSelectionBottomSheet> {
 
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text('Bir Öğe Seç', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(AppStrings.selectItem, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
         
         // Kategori Chipleri
@@ -301,7 +302,7 @@ class _ItemSelectionBottomSheetState extends State<_ItemSelectionBottomSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
-                    label: Text(isAll ? 'Tümü' : '${cat!.icon} ${cat.name}'),
+                    label: Text(isAll ? AppStrings.statusAll : '${cat!.icon} ${cat.name}'),
                     selected: isSelected,
                     onSelected: (v) => setState(() => _selectedCategory = cat),
                     selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
@@ -317,7 +318,7 @@ class _ItemSelectionBottomSheetState extends State<_ItemSelectionBottomSheet> {
           child: TextField(
             onChanged: (v) => setState(() => _searchQuery = v),
             decoration: InputDecoration(
-              hintText: 'Öğelerde ara...',
+              hintText: AppStrings.searchItems,
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
@@ -329,7 +330,7 @@ class _ItemSelectionBottomSheetState extends State<_ItemSelectionBottomSheet> {
         
         // Liste
         if (filteredItems.isEmpty)
-          const Expanded(child: Center(child: Text('Sonuç bulunamadı.')))
+          Expanded(child: Center(child: Text(AppStrings.noSearchResult)))
         else
           Expanded(
             child: ListView.builder(
@@ -348,7 +349,7 @@ class _ItemSelectionBottomSheetState extends State<_ItemSelectionBottomSheet> {
                           child: Center(child: Text(cat?.icon ?? '🎬', style: const TextStyle(fontSize: 20))),
                         ),
                   title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('${cat?.name ?? 'Kategori Yok'} • Puan: ${item.rating}'),
+                  subtitle: Text('${cat?.name ?? AppStrings.noCategory} • ${AppStrings.rating}: ${item.rating}'),
                   onTap: () => widget.onItemSelected(item),
                 );
               },

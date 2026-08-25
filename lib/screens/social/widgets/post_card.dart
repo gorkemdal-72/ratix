@@ -5,6 +5,7 @@ import '../../../services/social_service.dart';
 import '../../../services/admin_service.dart';
 import '../post_detail_screen.dart';
 import '../social_profile_screen.dart';
+import '../../../core/app_strings.dart';
 import 'package:intl/intl.dart';
 
 class PostCard extends StatefulWidget {
@@ -43,12 +44,12 @@ class _PostCardState extends State<PostCard> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Gönderiyi Sil'),
+        title: Text(AppStrings.deletePost),
         content: Text(asAdmin
-            ? 'Admin olarak bu gönderiyi silmek istediğinizden emin misiniz?'
-            : 'Bu gönderiyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.'),
+            ? (AppStrings.isEn ? 'Are you sure you want to delete this post as Admin?' : 'Admin olarak bu gönderiyi silmek istediğinizden emin misiniz?')
+            : AppStrings.deletePostConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -61,7 +62,7 @@ class _PostCardState extends State<PostCard> {
                 widget.onDelete!();
               }
             },
-            child: const Text('Sil', style: TextStyle(color: Colors.red)),
+            child: Text(AppStrings.delete, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -76,35 +77,35 @@ class _PostCardState extends State<PostCard> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text('Gönderiyi Raporla'),
+          title: Text(AppStrings.reportPost),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
                 initialValue: selectedReason,
-                decoration: const InputDecoration(labelText: 'Sebep'),
-                items: const [
-                  DropdownMenuItem(value: 'spam', child: Text('🚫 Spam')),
-                  DropdownMenuItem(value: 'spoiler', child: Text('⚠️ Spoiler')),
-                  DropdownMenuItem(value: 'inappropriate', child: Text('🔞 Uygunsuz İçerik')),
-                  DropdownMenuItem(value: 'harassment', child: Text('😡 Taciz / Zorbalık')),
-                  DropdownMenuItem(value: 'other', child: Text('📝 Diğer')),
+                decoration: InputDecoration(labelText: AppStrings.reason),
+                items: [
+                  DropdownMenuItem(value: 'spam', child: Text(AppStrings.isEn ? '🚫 Spam' : '🚫 Spam')),
+                  DropdownMenuItem(value: 'spoiler', child: Text(AppStrings.isEn ? '⚠️ Spoiler' : '⚠️ Spoiler')),
+                  DropdownMenuItem(value: 'inappropriate', child: Text(AppStrings.isEn ? '🔞 Inappropriate Content' : '🔞 Uygunsuz İçerik')),
+                  DropdownMenuItem(value: 'harassment', child: Text(AppStrings.isEn ? '😡 Harassment / Bullying' : '😡 Taciz / Zorbalık')),
+                  DropdownMenuItem(value: 'other', child: Text(AppStrings.isEn ? '📝 Other' : '📝 Diğer')),
                 ],
                 onChanged: (v) => setState(() => selectedReason = v!),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: detailsController,
-                decoration: const InputDecoration(
-                  labelText: 'Açıklama (opsiyonel)',
-                  hintText: 'Daha fazla bilgi ekle...',
+                decoration: InputDecoration(
+                  labelText: AppStrings.descriptionOptional,
+                  hintText: AppStrings.isEn ? 'Add more info...' : 'Daha fazla bilgi ekle...',
                 ),
                 maxLines: 3,
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
@@ -116,11 +117,11 @@ class _PostCardState extends State<PostCard> {
                 );
                 if (success && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Rapor gönderildi. Teşekkürler! 🛡️')),
+                    SnackBar(content: Text(AppStrings.reportSent)),
                   );
                 }
               },
-              child: const Text('Raporla'),
+              child: Text(AppStrings.report),
             ),
           ],
         ),
@@ -235,7 +236,7 @@ class _PostCardState extends State<PostCard> {
                     children: [
                       Icon(Icons.star, size: 14, color: Colors.orange.shade700),
                       const SizedBox(width: 4),
-                      Text('Editörün Seçimi', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                      Text(AppStrings.editorsChoice, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
                     ],
                   ),
                 ),
@@ -263,12 +264,12 @@ class _PostCardState extends State<PostCard> {
                         Row(
                           children: [
                             Flexible(
-                              child: Text(user?.displayName ?? 'İsimsiz', style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                              child: Text(user?.displayName ?? AppStrings.anonymousUser, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                             ),
                             _buildUserBadges(widget.post),
                           ],
                         ),
-                        Text('@${user?.username ?? 'user'} • ${DateFormat.yMMMd('tr_TR').format(widget.post.createdAt)}', style: Theme.of(context).textTheme.bodySmall),
+                        Text('@${user?.username ?? 'user'} • ${DateFormat.yMMMd(AppStrings.isEn ? 'en_US' : 'tr_TR').format(widget.post.createdAt)}', style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
                   ),
@@ -297,59 +298,59 @@ class _PostCardState extends State<PostCard> {
                     },
                     itemBuilder: (context) => [
                       if (isOwner)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'delete',
                           child: Row(
                             children: [
-                              Icon(Icons.delete_outline, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Sil', style: TextStyle(color: Colors.red)),
+                              const Icon(Icons.delete_outline, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Text(AppStrings.delete, style: const TextStyle(color: Colors.red)),
                             ],
                           ),
                         ),
                       if (_isAdmin) ...[
                         if (widget.post.isEditorsChoice)
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'editor_choice_remove',
                             child: Row(
                               children: [
-                                Icon(Icons.star_border, color: Colors.orange),
-                                SizedBox(width: 8),
-                                Text('Editörün Seçimi Kaldır', style: TextStyle(color: Colors.orange)),
+                                const Icon(Icons.star_border, color: Colors.orange),
+                                const SizedBox(width: 8),
+                                Text(AppStrings.isEn ? 'Remove Editor\'s Choice' : 'Editörün Seçimi Kaldır', style: const TextStyle(color: Colors.orange)),
                               ],
                             ),
                           )
                         else
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'editor_choice_add',
                             child: Row(
                               children: [
-                                Icon(Icons.star, color: Colors.orange),
-                                SizedBox(width: 8),
-                                Text('🌟 Editörün Seçimi Yap', style: TextStyle(color: Colors.orange)),
+                                const Icon(Icons.star, color: Colors.orange),
+                                const SizedBox(width: 8),
+                                Text('🌟 ${AppStrings.editorsChoice}', style: const TextStyle(color: Colors.orange)),
                               ],
                             ),
                           ),
                         if (!isOwner)
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'admin_delete',
                             child: Row(
                               children: [
-                                Icon(Icons.gavel, color: Colors.redAccent),
-                                SizedBox(width: 8),
-                                Text('Admin Sil', style: TextStyle(color: Colors.redAccent)),
+                                const Icon(Icons.gavel, color: Colors.redAccent),
+                                const SizedBox(width: 8),
+                                Text(AppStrings.isEn ? 'Admin Delete' : 'Admin Sil', style: const TextStyle(color: Colors.redAccent)),
                               ],
                             ),
                           ),
                       ],
                       if (!isOwner)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'report',
                           child: Row(
                             children: [
-                              Icon(Icons.flag_outlined, color: Colors.grey),
-                              SizedBox(width: 8),
-                              Text('Raporla'),
+                              const Icon(Icons.flag_outlined, color: Colors.grey),
+                              const SizedBox(width: 8),
+                              Text(AppStrings.report),
                             ],
                           ),
                         ),
@@ -398,7 +399,7 @@ class _PostCardState extends State<PostCard> {
                           children: [
                             Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
-                            Text('Puan: ${item.rating}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+                            Text('${AppStrings.rating}: ${item.rating}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),

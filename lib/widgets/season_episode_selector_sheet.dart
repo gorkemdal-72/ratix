@@ -111,9 +111,16 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
   }
 
   void _toggleSeason(int seasonNum, int totalEpCount, bool select) {
+    if (_tvDetails == null) return;
     setState(() {
       if (select) {
-        _selectedEpisodes[seasonNum] = List.generate(totalEpCount, (index) => index + 1).toSet();
+        // Önceki tüm sezonların tüm bölümlerini de otomatik seç
+        for (final season in _tvDetails!.seasons) {
+          if (season.seasonNumber <= seasonNum) {
+            _selectedEpisodes[season.seasonNumber] =
+                List.generate(season.episodeCount, (index) => index + 1).toSet();
+          }
+        }
       } else {
         _selectedEpisodes[seasonNum] = {};
       }
@@ -122,10 +129,21 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
   }
 
   void _toggleEpisode(int seasonNum, int epNum, int totalEpCount, bool select) {
+    if (_tvDetails == null) return;
     setState(() {
       _selectedEpisodes.putIfAbsent(seasonNum, () => {});
       if (select) {
-        _selectedEpisodes[seasonNum]!.add(epNum);
+        // 1. Önceki tüm sezonların tüm bölümlerini otomatik seç
+        for (final season in _tvDetails!.seasons) {
+          if (season.seasonNumber < seasonNum) {
+            _selectedEpisodes[season.seasonNumber] =
+                List.generate(season.episodeCount, (index) => index + 1).toSet();
+          }
+        }
+        // 2. Mevcut sezonun 1. bölümünden bu bölüme (epNum) kadar olan tüm bölümleri otomatik seç
+        for (int i = 1; i <= epNum; i++) {
+          _selectedEpisodes[seasonNum]!.add(i);
+        }
       } else {
         _selectedEpisodes[seasonNum]!.remove(epNum);
       }
@@ -473,9 +491,12 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onPressed: _calculateTotalSelectedEpisodes() > 0 ? _onConfirm : null,
+                      onPressed: _onConfirm,
                       icon: const Icon(Icons.check),
-                      label: const Text('Seçimi Ekle', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: Text(
+                        _calculateTotalSelectedEpisodes() > 0 ? 'Seçimi Ekle' : 'Devam Et', 
+                        style: const TextStyle(fontWeight: FontWeight.bold)
+                      ),
                     ),
                   ],
                 ),

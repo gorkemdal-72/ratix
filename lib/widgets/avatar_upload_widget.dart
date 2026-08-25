@@ -63,7 +63,7 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  title: const Text(AppStrings.gallery),
+                  title: Text(AppStrings.gallery),
                   onTap: () {
                     Navigator.of(context).pop();
                     _pickImage(ImageSource.gallery);
@@ -82,7 +82,7 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  title: const Text(AppStrings.camera),
+                  title: Text(AppStrings.camera),
                   onTap: () {
                     Navigator.of(context).pop();
                     _pickImage(ImageSource.camera);
@@ -181,7 +181,7 @@ class _AvatarUploadWidgetState extends State<AvatarUploadWidget> {
              if (widget.onUploadComplete != null) widget.onUploadComplete!();
              
              ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text(AppStrings.photoUpdated)),
+               SnackBar(content: Text(AppStrings.photoUpdated)),
              );
            }
         } catch (e) {

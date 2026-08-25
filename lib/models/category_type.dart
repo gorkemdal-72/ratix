@@ -1,3 +1,5 @@
+import '../core/app_strings.dart';
+
 /// Kategori türleri — hangi API'nin kullanılacağını ve
 /// status etiketlerini belirler.
 enum CategoryType {
@@ -15,16 +17,30 @@ enum CategoryType {
 extension CategoryTypeX on CategoryType {
   /// Kullanıcıya gösterilen isim
   String get displayName {
-    switch (this) {
-      case CategoryType.movie:  return 'Film';
-      case CategoryType.tvShow: return 'Dizi';
-      case CategoryType.book:   return 'Kitap';
-      case CategoryType.game:   return 'Oyun';
-      case CategoryType.music:  return 'Müzik';
-      case CategoryType.food:   return 'Yemek';
-      case CategoryType.drink:  return 'İçecek';
-      case CategoryType.place:  return 'Yer';
-      case CategoryType.custom: return 'Özel';
+    if (AppStrings.isEn) {
+      switch (this) {
+        case CategoryType.movie:  return 'Movie';
+        case CategoryType.tvShow: return 'TV Show';
+        case CategoryType.book:   return 'Book';
+        case CategoryType.game:   return 'Game';
+        case CategoryType.music:  return 'Music';
+        case CategoryType.food:   return 'Food';
+        case CategoryType.drink:  return 'Drink';
+        case CategoryType.place:  return 'Place';
+        case CategoryType.custom: return 'Custom';
+      }
+    } else {
+      switch (this) {
+        case CategoryType.movie:  return 'Film';
+        case CategoryType.tvShow: return 'Dizi';
+        case CategoryType.book:   return 'Kitap';
+        case CategoryType.game:   return 'Oyun';
+        case CategoryType.music:  return 'Müzik';
+        case CategoryType.food:   return 'Yemek';
+        case CategoryType.drink:  return 'İçecek';
+        case CategoryType.place:  return 'Yer';
+        case CategoryType.custom: return 'Özel';
+      }
     }
   }
 
@@ -59,44 +75,84 @@ extension CategoryTypeX on CategoryType {
 
   /// Status 1 etiketi (tamamlandı)
   String get status1Label {
-    switch (this) {
-      case CategoryType.movie:
-      case CategoryType.tvShow: return 'İzlendi';
-      case CategoryType.book:   return 'Okundu';
-      case CategoryType.game:   return 'Oynandı';
-      case CategoryType.music:  return 'Dinlendi';
-      case CategoryType.food:
-      case CategoryType.drink:  return 'Denendi';
-      case CategoryType.place:  return 'Gidildi';
-      case CategoryType.custom: return 'Tamamlandı';
+    if (AppStrings.isEn) {
+      switch (this) {
+        case CategoryType.movie:
+        case CategoryType.tvShow: return 'Watched';
+        case CategoryType.book:   return 'Read';
+        case CategoryType.game:   return 'Played';
+        case CategoryType.music:  return 'Listened';
+        case CategoryType.food:
+        case CategoryType.drink:  return 'Tried';
+        case CategoryType.place:  return 'Visited';
+        case CategoryType.custom: return 'Completed';
+      }
+    } else {
+      switch (this) {
+        case CategoryType.movie:
+        case CategoryType.tvShow: return 'İzlendi';
+        case CategoryType.book:   return 'Okundu';
+        case CategoryType.game:   return 'Oynandı';
+        case CategoryType.music:  return 'Dinlendi';
+        case CategoryType.food:
+        case CategoryType.drink:  return 'Denendi';
+        case CategoryType.place:  return 'Gidildi';
+        case CategoryType.custom: return 'Tamamlandı';
+      }
     }
   }
 
   /// Status 2 etiketi (devam ediyor) — null ise bu tip 2. durumu desteklemiyor
   String? get status2Label {
-    switch (this) {
-      case CategoryType.movie:
-      case CategoryType.tvShow: return 'İzleniyor';
-      case CategoryType.book:   return 'Okunuyor';
-      case CategoryType.game:   return 'Oynanıyor';
-      case CategoryType.music:  return 'Dinleniyor';
-      case CategoryType.custom: return 'Devam Ediyor';
-      default:                  return null;
+    if (AppStrings.isEn) {
+      switch (this) {
+        case CategoryType.movie:
+        case CategoryType.tvShow: return 'Watching';
+        case CategoryType.book:   return 'Reading';
+        case CategoryType.game:   return 'Playing';
+        case CategoryType.music:  return 'Listening';
+        case CategoryType.custom: return 'In Progress';
+        default:                  return null;
+      }
+    } else {
+      switch (this) {
+        case CategoryType.movie:
+        case CategoryType.tvShow: return 'İzleniyor';
+        case CategoryType.book:   return 'Okunuyor';
+        case CategoryType.game:   return 'Oynanıyor';
+        case CategoryType.music:  return 'Dinleniyor';
+        case CategoryType.custom: return 'Devam Ediyor';
+        default:                  return null;
+      }
     }
   }
 
   /// Status 3 etiketi (yapılacak)
   String get status3Label {
-    switch (this) {
-      case CategoryType.movie:
-      case CategoryType.tvShow: return 'İzlenecek';
-      case CategoryType.book:   return 'Okunacak';
-      case CategoryType.game:   return 'Oynanacak';
-      case CategoryType.music:  return 'Dinlenecek';
-      case CategoryType.food:
-      case CategoryType.drink:  return 'Denenecek';
-      case CategoryType.place:  return 'Gidilecek';
-      case CategoryType.custom: return 'Yapılacak';
+    if (AppStrings.isEn) {
+      switch (this) {
+        case CategoryType.movie:
+        case CategoryType.tvShow: return 'To Watch';
+        case CategoryType.book:   return 'To Read';
+        case CategoryType.game:   return 'To Play';
+        case CategoryType.music:  return 'To Listen';
+        case CategoryType.food:
+        case CategoryType.drink:  return 'To Try';
+        case CategoryType.place:  return 'To Visit';
+        case CategoryType.custom: return 'To Do';
+      }
+    } else {
+      switch (this) {
+        case CategoryType.movie:
+        case CategoryType.tvShow: return 'İzlenecek';
+        case CategoryType.book:   return 'Okunacak';
+        case CategoryType.game:   return 'Oynanacak';
+        case CategoryType.music:  return 'Dinlenecek';
+        case CategoryType.food:
+        case CategoryType.drink:  return 'Denenecek';
+        case CategoryType.place:  return 'Gidilecek';
+        case CategoryType.custom: return 'Yapılacak';
+      }
     }
   }
 

@@ -69,6 +69,46 @@ class DatabaseService {
         });
   }
 
+  // --- Main Category Items Stream (Includes Main Category + All Subcategories) ---
+  Stream<List<ItemModel>> getMainCategoryItemsStream(String mainCategoryId) async* {
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'main_items_cache_${_uid}_$mainCategoryId';
+
+    final cachedData = prefs.getString(cacheKey);
+    if (cachedData != null) {
+      try {
+        final List decoded = jsonDecode(cachedData);
+        yield decoded.map((data) => ItemModel.fromMap(data, data['id'])).toList();
+      } catch (_) {}
+    }
+
+    final subCatRes = await _supabase
+        .from('categories')
+        .select('id')
+        .eq('parent_id', mainCategoryId);
+    
+    final Set<String> targetCategoryIds = {mainCategoryId};
+    for (final row in (subCatRes as List? ?? [])) {
+      if (row['id'] != null) {
+        targetCategoryIds.add(row['id'].toString());
+      }
+    }
+
+    yield* _supabase
+        .from('items')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', _uid)
+        .order('created_at', ascending: false)
+        .handleError((e) {
+          debugPrint('[DatabaseService] getMainCategoryItemsStream ERROR: $e');
+        })
+        .map((rows) {
+          final filteredRows = rows.where((data) => targetCategoryIds.contains(data['category_id'].toString())).toList();
+          prefs.setString(cacheKey, jsonEncode(filteredRows));
+          return filteredRows.map((data) => ItemModel.fromMap(data, data['id'])).toList();
+        });
+  }
+
   // --- Fetch categories once (for back-navigation reliability) ---
   Future<List<CategoryModel>> fetchCategories() async {
     try {
@@ -97,6 +137,9 @@ class DatabaseService {
         'is_private': category.isPrivate,
         if (category.passwordHash != null) 'password_hash': category.passwordHash,
         if (category.parentId != null) 'parent_id': category.parentId,
+        if (category.customStatus1 != null) 'custom_status_1': category.customStatus1,
+        if (category.customStatus2 != null) 'custom_status_2': category.customStatus2,
+        if (category.customStatus3 != null) 'custom_status_3': category.customStatus3,
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -121,11 +164,22 @@ class DatabaseService {
   }
 
   // --- Update Category ---
-  Future<String?> updateCategory(String id, String name, String icon) async {
+  Future<String?> updateCategory(
+    String id,
+    String name,
+    String icon, {
+    String? customStatus1,
+    String? customStatus2,
+    String? customStatus3,
+  }) async {
     try {
       await _supabase.from('categories').update({
         'name': name,
         'icon': icon,
+        'custom_status_1': customStatus1,
+        'custom_status_2': customStatus2,
+        'custom_status_3': customStatus3,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', id);
       return null;
     } catch (e) {
@@ -239,9 +293,13 @@ class DatabaseService {
   // --- Update Item Seasons Data ---
   Future<void> updateItemSeasons(String itemId, Map<String, dynamic> seasonsData, int calculatedRuntime) async {
     try {
+      final bool isAllSelected = seasonsData['all_selected'] == true;
+      final String watchStatus = isAllSelected ? 'watched' : 'watching';
+
       await _supabase.from('items').update({
         'seasons_data': seasonsData,
         'runtime': calculatedRuntime,
+        'watch_status': watchStatus,
       }).eq('id', itemId);
     } catch (e) {
       debugPrint('[DatabaseService] updateItemSeasons ERROR: $e');

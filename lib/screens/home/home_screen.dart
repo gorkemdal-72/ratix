@@ -15,7 +15,7 @@ import '../details/category_detail_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum CategorySort { defaultSort, nameAsc, nameDesc }
+enum CategorySort { newest, oldest, nameAsc, nameDesc, type }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final DatabaseService _dbService = DatabaseService();
 
   String _searchQuery = "";
-  CategorySort _currentSort = CategorySort.defaultSort;
+  CategorySort _currentSort = CategorySort.newest;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -56,9 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: AppStrings.sort,
             onSelected: (val) => setState(() => _currentSort = val),
             itemBuilder: (context) => [
-              _buildSortMenuItem(CategorySort.defaultSort, AppStrings.sortDefault, Icons.access_time_rounded),
-              _buildSortMenuItem(CategorySort.nameAsc, AppStrings.sortNameAsc, Icons.sort_by_alpha_rounded),
-              _buildSortMenuItem(CategorySort.nameDesc, AppStrings.sortNameDesc, Icons.sort_by_alpha_rounded),
+              _buildSortMenuItem(CategorySort.newest, 'En Yeni (Oluşturma)', Icons.access_time_rounded),
+              _buildSortMenuItem(CategorySort.oldest, 'En Eski (Oluşturma)', Icons.history_rounded),
+              _buildSortMenuItem(CategorySort.nameAsc, 'İsim (A - Z)', Icons.sort_by_alpha_rounded),
+              _buildSortMenuItem(CategorySort.nameDesc, 'İsim (Z - A)', Icons.sort_by_alpha_rounded),
+              _buildSortMenuItem(CategorySort.type, 'Kategori Türü', Icons.category_rounded),
             ],
           ),
           IconButton(
@@ -113,16 +115,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   return _buildEmptyState();
                 }
 
-                List<CategoryModel> categories = snapshot.data!.where((c) => !c.isSubCategory).toList();
+                var categories = (snapshot.data ?? []).where((c) => !c.isSubCategory).toList();
 
                 if (_searchQuery.isNotEmpty) {
                   categories = categories.where((c) => c.name.toLowerCase().contains(_searchQuery)).toList();
                 }
 
-                if (_currentSort == CategorySort.nameAsc) {
-                  categories.sort((a, b) => a.name.compareTo(b.name));
-                } else if (_currentSort == CategorySort.nameDesc) {
-                  categories.sort((a, b) => b.name.compareTo(a.name));
+                switch (_currentSort) {
+                  case CategorySort.newest:
+                    break;
+                  case CategorySort.oldest:
+                    categories = categories.reversed.toList();
+                    break;
+                  case CategorySort.nameAsc:
+                    categories.sort((a, b) => a.name.compareTo(b.name));
+                    break;
+                  case CategorySort.nameDesc:
+                    categories.sort((a, b) => b.name.compareTo(a.name));
+                    break;
+                  case CategorySort.type:
+                    categories.sort((a, b) => a.categoryType.displayName.compareTo(b.categoryType.displayName));
+                    break;
                 }
 
                 if (categories.isEmpty) {
@@ -280,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Icon(Icons.edit_outlined, color: Theme.of(context).colorScheme.primary, size: 20),
                           const SizedBox(width: AppTheme.spaceSm),
-                          const Text(AppStrings.edit),
+                          Text(AppStrings.edit),
                         ],
                       ),
                     ),
@@ -304,13 +317,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
-                          SizedBox(width: AppTheme.spaceSm),
-                          Text(AppStrings.delete, style: TextStyle(color: AppTheme.danger)),
+                          const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+                          const SizedBox(width: AppTheme.spaceSm),
+                          Text(AppStrings.delete, style: const TextStyle(color: AppTheme.danger)),
                         ],
                       ),
                     ),
@@ -407,10 +420,10 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(AppStrings.deleteConfirm),
-        content: const Text(AppStrings.deleteCategoryMsg),
+        title: Text(AppStrings.deleteConfirm),
+        content: Text(AppStrings.deleteCategoryMsg),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -421,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               }
             },
-            child: const Text(AppStrings.delete, style: TextStyle(color: AppTheme.danger)),
+            child: Text(AppStrings.delete, style: const TextStyle(color: AppTheme.danger)),
           ),
         ],
       ),
@@ -432,6 +445,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showAddCategoryDialog(BuildContext context) {
     final nameController = TextEditingController();
     final passwordController = TextEditingController();
+    final status1Controller = TextEditingController();
+    final status2Controller = TextEditingController();
+    final status3Controller = TextEditingController();
     CategoryType selectedType = CategoryType.movie;
     String selectedEmoji = CategoryType.movie.defaultEmoji;
     RatingType selectedRatingType = RatingType.stars5;
@@ -440,16 +456,46 @@ class _HomeScreenState extends State<HomeScreen> {
     // Kategori tipleri grid'i
     final types = CategoryType.values;
 
+    final scrollCtrl = ScrollController();
+    final statusKey = GlobalKey();
+    String? dialogError;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text(AppStrings.newCategory),
+          title: Text(AppStrings.newCategory),
           content: SingleChildScrollView(
+            controller: scrollCtrl,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (dialogError != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.danger.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            dialogError!,
+                            style: const TextStyle(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 // ── Seçili emoji büyük gösterim ──
                 Center(
                   child: Container(
@@ -480,6 +526,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () => setState(() {
                         selectedType = type;
                         selectedEmoji = type.defaultEmoji;
+                        dialogError = null;
                       }),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -549,9 +596,66 @@ class _HomeScreenState extends State<HomeScreen> {
                 // ── Liste adı ──
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: AppStrings.categoryName,
-                    prefixIcon: Icon(Icons.label_outline),
+                    prefixIcon: const Icon(Icons.label_outline),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spaceMd),
+
+                // ── Durum Etiketlerini Özelleştirme ──
+                KeyedSubtree(
+                  key: statusKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedType == CategoryType.custom
+                            ? AppStrings.statusOptionsCustomRequired
+                            : AppStrings.statusOptionsOptional,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: selectedType == CategoryType.custom
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spaceSm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: status1Controller,
+                              decoration: InputDecoration(
+                                labelText: AppStrings.status1,
+                                hintText: selectedType.status1Label,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: status2Controller,
+                              decoration: InputDecoration(
+                                labelText: AppStrings.status2,
+                                hintText: selectedType.status2Label ?? (AppStrings.isEn ? 'In Progress' : 'Devam Ediyor'),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: status3Controller,
+                        decoration: InputDecoration(
+                          labelText: AppStrings.status3,
+                          hintText: selectedType.status3Label,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: AppTheme.spaceMd),
@@ -568,9 +672,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     isExpanded: true,
                     underline: const SizedBox(),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    items: const [
-                      DropdownMenuItem(value: RatingType.stars5, child: Text("⭐ 5 Yıldız")),
-                      DropdownMenuItem(value: RatingType.score10, child: Text("🎯 1-10 Puan")),
+                    items: [
+                      DropdownMenuItem(value: RatingType.stars5, child: Text("⭐ ${AppStrings.stars5}")),
+                      DropdownMenuItem(value: RatingType.score10, child: Text("🎯 ${AppStrings.score10}")),
                     ],
                     onChanged: (val) {
                       if (val != null) setState(() => selectedRatingType = val);
@@ -581,8 +685,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // ── Gizlilik ──
                 SwitchListTile(
-                  title: const Text('Özel (Şifreli) Kategori'),
-                  subtitle: const Text('Bu kategoriye girmek için şifre istenir'),
+                  title: Text(AppStrings.privateCategory),
+                  subtitle: Text(AppStrings.privateCategorySub),
                   value: isPrivate,
                   onChanged: (val) => setState(() => isPrivate = val),
                   contentPadding: EdgeInsets.zero,
@@ -592,9 +696,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   TextField(
                     controller: passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Kategori Şifresi',
-                      prefixIcon: Icon(Icons.lock_outline),
+                    decoration: InputDecoration(
+                      labelText: AppStrings.categoryPassword,
+                      prefixIcon: const Icon(Icons.lock_outline),
                     ),
                   ),
                 ],
@@ -602,13 +706,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
             ElevatedButton(
               onPressed: () async {
                 if (isPrivate && passwordController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Lütfen kategori için bir şifre belirleyin'), backgroundColor: AppTheme.danger),
-                  );
+                  setState(() {
+                    dialogError = 'Lütfen kategori için bir şifre belirleyin.';
+                  });
                   return;
                 }
 
@@ -621,6 +725,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   passwordHash = sha256.convert(utf8.encode(passwordController.text.trim())).toString();
                 }
 
+                final cStatus1 = status1Controller.text.trim().isNotEmpty ? status1Controller.text.trim() : null;
+                final cStatus2 = status2Controller.text.trim().isNotEmpty ? status2Controller.text.trim() : null;
+                final cStatus3 = status3Controller.text.trim().isNotEmpty ? status3Controller.text.trim() : null;
+
+                if (selectedType == CategoryType.custom && (cStatus1 == null || cStatus3 == null)) {
+                  setState(() {
+                    dialogError = 'Lütfen Özel kategori için en az 1. ve 3. Durum adlarını giriniz! (Örn: Tamamlandı, Yapılacak)';
+                  });
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (statusKey.currentContext != null) {
+                      Scrollable.ensureVisible(
+                        statusKey.currentContext!,
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  });
+                  return;
+                }
+
                 final newCategory = CategoryModel(
                   id: '',
                   name: name,
@@ -629,18 +753,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   categoryType: selectedType,
                   isPrivate: isPrivate,
                   passwordHash: passwordHash,
+                  customStatus1: cStatus1,
+                  customStatus2: cStatus2,
+                  customStatus3: cStatus3,
                 );
                 final error = await _dbService.addCategory(newCategory);
                 if (!ctx.mounted) return;
                 if (error != null) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text('Hata: $error'), backgroundColor: AppTheme.danger),
-                  );
+                  setState(() {
+                    dialogError = 'Hata: $error';
+                  });
                 } else {
                   Navigator.pop(ctx);
                 }
               },
-              child: const Text(AppStrings.createCategory),
+              child: Text(AppStrings.createCategory),
             ),
           ],
         ),
@@ -651,17 +778,51 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─── KATEGORİ DÜZENLEME DİYALOĞU ───
   void _showEditCategoryDialog(BuildContext context, CategoryModel category) {
     final nameController = TextEditingController(text: category.name);
+    final status1Controller = TextEditingController(text: category.customStatus1 ?? '');
+    final status2Controller = TextEditingController(text: category.customStatus2 ?? '');
+    final status3Controller = TextEditingController(text: category.customStatus3 ?? '');
     String selectedEmoji = category.icon;
+    final isCustom = category.categoryType == CategoryType.custom;
+    final scrollCtrl = ScrollController();
+    final statusKey = GlobalKey();
+    String? dialogError;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text(AppStrings.editCategory),
+          title: Text(AppStrings.editCategory),
           content: SingleChildScrollView(
+            controller: scrollCtrl,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (dialogError != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.danger.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            dialogError!,
+                            style: const TextStyle(color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 Center(
                   child: Container(
                     width: 72,
@@ -698,31 +859,112 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppTheme.spaceLg),
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: AppStrings.categoryName,
-                    prefixIcon: Icon(Icons.label_outline),
+                    prefixIcon: const Icon(Icons.label_outline),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spaceMd),
+
+                // ── Durum Etiketlerini Düzenleme ──
+                KeyedSubtree(
+                  key: statusKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isCustom ? AppStrings.statusOptionsRequired : AppStrings.statusOptionsEdit,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isCustom ? Theme.of(context).colorScheme.primary : null,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spaceSm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: status1Controller,
+                              decoration: InputDecoration(
+                                labelText: AppStrings.status1,
+                                hintText: category.categoryType.status1Label,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: status2Controller,
+                              decoration: InputDecoration(
+                                labelText: AppStrings.status2,
+                                hintText: category.categoryType.status2Label ?? (AppStrings.isEn ? 'In Progress' : 'Devam Ediyor'),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: status3Controller,
+                        decoration: InputDecoration(
+                          labelText: AppStrings.status3,
+                          hintText: category.categoryType.status3Label,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isNotEmpty) {
-                  final error = await _dbService.updateCategory(category.id, nameController.text, selectedEmoji);
-                  if (!ctx.mounted) return;
-                  if (error != null) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Güncellenemedi: $error'), backgroundColor: AppTheme.danger),
-                    );
-                  } else {
-                    Navigator.pop(ctx);
-                  }
+                if (nameController.text.trim().isEmpty) return;
+
+                final c1 = status1Controller.text.trim();
+                final c2 = status2Controller.text.trim();
+                final c3 = status3Controller.text.trim();
+
+                if (isCustom && (c1.isEmpty || c3.isEmpty)) {
+                  setState(() {
+                    dialogError = 'Lütfen Özel kategori için en az 1. ve 3. Durum seçeneklerini belirleyin!';
+                  });
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (statusKey.currentContext != null) {
+                      Scrollable.ensureVisible(
+                        statusKey.currentContext!,
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  });
+                  return;
+                }
+
+                final error = await _dbService.updateCategory(
+                  category.id,
+                  nameController.text.trim(),
+                  selectedEmoji,
+                  customStatus1: c1.isNotEmpty ? c1 : null,
+                  customStatus2: c2.isNotEmpty ? c2 : null,
+                  customStatus3: c3.isNotEmpty ? c3 : null,
+                );
+
+                if (!ctx.mounted) return;
+                if (error != null) {
+                  setState(() {
+                    dialogError = 'Güncellenemedi: $error';
+                  });
+                } else {
+                  Navigator.pop(ctx);
                 }
               },
-              child: const Text(AppStrings.updateCategory),
+              child: Text(AppStrings.updateCategory),
             ),
           ],
         ),
@@ -771,7 +1013,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text(AppStrings.cancel)),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.cancel)),
             ElevatedButton(
               onPressed: () {
                 final inputHash = sha256.convert(utf8.encode(passwordController.text.trim())).toString();

@@ -19,8 +19,17 @@ CREATE TABLE IF NOT EXISTS public.categories (
   category_type TEXT NOT NULL,
   rating_type TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
-  parent_id UUID REFERENCES public.categories(id) ON DELETE CASCADE
+  parent_id UUID REFERENCES public.categories(id) ON DELETE CASCADE,
+  custom_status_1 TEXT,
+  custom_status_2 TEXT,
+  custom_status_3 TEXT
 );
+
+-- Alt kategoriler ve Özel durum etiketleri için ALTER komutları:
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES public.categories(id) ON DELETE CASCADE;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS custom_status_1 TEXT;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS custom_status_2 TEXT;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS custom_status_3 TEXT;
 
 -- 3. Ögeler (Items - Filmler, Kitaplar vb.) Tablosu
 CREATE TABLE IF NOT EXISTS public.items (
