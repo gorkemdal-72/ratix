@@ -69,26 +69,48 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Widget _buildSubCategoryBar() {
-    // Sadece üst seviye kategoriler alt kategoriye sahip olabilir
     if (widget.category.isSubCategory) return const SizedBox.shrink();
 
     return StreamBuilder<List<CategoryModel>>(
       stream: _dbService.getSubCategoriesStream(widget.category.id),
       builder: (context, snapshot) {
         final subCats = snapshot.data ?? [];
+        final statuses = _statusOptions;
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               FilterChip(
-                selected: _selectedSubCategory == null,
+                selected: _selectedSubCategory == null && _statusFilter == null,
                 label: const Text('Tümü'),
-                onSelected: (_) => setState(() => _selectedSubCategory = null),
+                onSelected: (_) => setState(() {
+                  _selectedSubCategory = null;
+                  _statusFilter = null;
+                }),
                 selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
               ),
               const SizedBox(width: 8),
+              
+              // 1) Otomatik Durum Alt Listeleri (İzlenecekler, İzleniyor, vb.)
+              ...statuses.map((status) {
+                final isSelected = _statusFilter == status;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    selected: isSelected,
+                    label: Text(status),
+                    onSelected: (_) => setState(() {
+                      _statusFilter = isSelected ? null : status;
+                      _selectedSubCategory = null; // Durum seçilirse custom alt kategoriyi temizle
+                    }),
+                    selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                  ),
+                );
+              }),
+
+              // 2) Kullanıcı Tarafından Oluşturulan Özel Alt Kategoriler
               ...subCats.map((subCat) {
                 final isSelected = _selectedSubCategory?.id == subCat.id;
                 return Padding(
@@ -99,12 +121,16 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                       selected: isSelected,
                       avatar: Text(subCat.icon, style: const TextStyle(fontSize: 14)),
                       label: Text(subCat.name),
-                      onSelected: (_) => setState(() => _selectedSubCategory = isSelected ? null : subCat),
+                      onSelected: (_) => setState(() {
+                        _selectedSubCategory = isSelected ? null : subCat;
+                        _statusFilter = null; // Custom alt kategori seçilirse durum filtresini temizle
+                      }),
                       selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                     ),
                   ),
                 );
               }),
+              
               ActionChip(
                 avatar: const Icon(Icons.add_rounded, size: 16),
                 label: const Text('Alt Kategori Ekle'),
@@ -374,7 +400,6 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             ),
           ),
         ),
-        _buildStatusChips(),
         _buildSubCategoryBar(),
         Expanded(
           child: StreamBuilder<List<ItemModel>>(
@@ -435,17 +460,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     return cat.status1Label;
   }
 
-  Widget _buildStatusChips() {
-    final statuses = _statusOptions;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(children: [
-        _chip(AppStrings.statusAll, _statusFilter == null, () => setState(() => _statusFilter = null)),
-        ...statuses.map((s) => _chip(s, _statusFilter == s, () => setState(() => _statusFilter = _statusFilter == s ? null : s))),
-      ]),
-    );
-  }
+
 
   Widget _buildTotalTimeBanner(List<ItemModel> items) {
     if (widget.category.categoryType != CategoryType.movie && widget.category.categoryType != CategoryType.tvShow) {
@@ -528,27 +543,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     );
   }
 
-  Widget _chip(String label, bool selected, VoidCallback onTap) {
-    final color = Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? color : color.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(label, style: TextStyle(
-            color: selected ? Colors.white : color,
-            fontSize: 13, fontWeight: FontWeight.w600,
-          )),
-        ),
-      ),
-    );
-  }
+
   Widget _emptyState() {
     return Center(
       child: Column(
@@ -1346,6 +1341,9 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
   List<SearchResult> _results = [];
   bool _loading = false;
   Timer? _debounce;
+  BookSearchMode _bookSearchMode = BookSearchMode.all;
+
+  bool get _isBook => widget.category.categoryType == CategoryType.book;
 
   @override
   void dispose() {
@@ -1373,12 +1371,42 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
     _currentQuery = q;
     if (mounted) setState(() { _loading = true; });
     
-    final res = await SearchService.instance.search(widget.category.categoryType, q);
+    final res = await SearchService.instance.search(
+      widget.category.categoryType, q,
+      bookMode: _bookSearchMode,
+    );
     
     // Eğer yanıt geldiğinde kullanıcı başka bir şey aramışsa, bu yanıtı (stale) çöpe at
     if (_currentQuery != q) return;
     
     if (mounted) setState(() { _results = res; _loading = false; });
+  }
+
+  void _onBookModeChanged(BookSearchMode mode) {
+    setState(() { _bookSearchMode = mode; });
+    // Mevcut sorguyu yeni modda tekrar ara
+    if (_ctrl.text.isNotEmpty) {
+      _search(_ctrl.text);
+    }
+  }
+
+  Widget _buildModeChip(String label, BookSearchMode mode, IconData icon) {
+    final isSelected = _bookSearchMode == mode;
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: isSelected ? Theme.of(context).colorScheme.onPrimary : null),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Theme.of(context).colorScheme.onPrimary : null)),
+        ],
+      ),
+      selected: isSelected,
+      onSelected: (_) => _onBookModeChanged(mode),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
   }
 
   @override
@@ -1430,6 +1458,19 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
               ],
             ),
           ),
+          if (_isBook)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              child: Row(
+                children: [
+                  _buildModeChip('Tümü', BookSearchMode.all, Icons.search),
+                  const SizedBox(width: 8),
+                  _buildModeChip('Kitap Adı', BookSearchMode.title, Icons.menu_book_rounded),
+                  const SizedBox(width: 8),
+                  _buildModeChip('Yazar', BookSearchMode.author, Icons.person_rounded),
+                ],
+              ),
+            ),
           const Divider(height: 1),
           if (_loading) const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_results.isEmpty && _ctrl.text.isNotEmpty)
