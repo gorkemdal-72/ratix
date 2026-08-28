@@ -5,6 +5,7 @@ import '../../core/app_theme.dart';
 import '../../core/app_strings.dart';
 import '../../widgets/avatar_upload_widget.dart';
 import '../auth/login_screen.dart';
+import 'statistics_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -113,6 +114,38 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
 
+            const SizedBox(height: AppTheme.spaceLg),
+            
+            // ─── İSTATİSTİKLER BUTONU ───
+            InkWell(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatisticsScreen())),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppTheme.spaceMd),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.bar_chart_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
+                    const SizedBox(width: AppTheme.spaceMd),
+                    Expanded(
+                      child: Text(
+                        AppStrings.isEn ? 'View My Statistics' : 'İstatistiklerimi Görüntüle',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.primary),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: AppTheme.spaceLg),
 
             // ─── BİLGİ KARTLARI ───
