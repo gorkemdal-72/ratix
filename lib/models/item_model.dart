@@ -23,7 +23,8 @@ class ItemModel {
   final int? runtime;         // Toplam izleme süresi (dakika)
   final Map<String, dynamic>? seasonsData; // Dizi sezon ve bölüm seçim verileri
   final int rewatchCount;     // Tekrar izleme sayısı
-  final bool isSpoiler;       // YENİ: Spoiler Kalkanı
+  final bool isSpoiler;       // Spoiler Kalkanı
+  final DateTime? nextAirDate; // YENİ: Sonraki yayın/vizyon tarihi (Takvim için)
 
   ItemModel({
     required this.id,
@@ -32,11 +33,6 @@ class ItemModel {
     this.rating = 0.0,
     this.isFavorite = false,
     required this.createdAt,
-    this.review,
-    this.categoryIcon,
-    this.categoryName,
-    this.categoryId,
-    // Yeni alanlar
     this.posterUrl,
     this.year,
     this.externalId,
@@ -44,11 +40,16 @@ class ItemModel {
     this.genres = const [],
     this.watchStatus = 'watched',
     this.author,
+    this.categoryIcon,
+    this.categoryName,
+    this.categoryId,
     this.overview,
+    this.review,
     this.runtime,
     this.seasonsData,
     this.rewatchCount = 0,
     this.isSpoiler = false,
+    this.nextAirDate,
   });
 
   Map<String, dynamic> toMap() {
@@ -73,18 +74,11 @@ class ItemModel {
       'runtime': runtime,
       'seasons_data': seasonsData,
       'rewatch_count': rewatchCount,
+      'next_air_date': nextAirDate?.toIso8601String(),
     };
   }
 
   factory ItemModel.fromMap(Map<String, dynamic> map, String docId) {
-    // 1. RATING GÜVENLİĞİ: Hem int hem double kabul et
-    double parsedRating = 0.0;
-    if (map['rating'] is num) {
-      parsedRating = (map['rating'] as num).toDouble();
-    } else if (map['rating'] is String) {
-      parsedRating = double.tryParse(map['rating']) ?? 0.0;
-    }
-
     // 2. TARİH GÜVENLİĞİ: Hem ISO String hem DateTime kabul et
     DateTime parsedDate = DateTime.now();
     try {
@@ -97,6 +91,23 @@ class ItemModel {
     } catch (e) {
       parsedDate = DateTime.now();
     }
+    
+    DateTime? parsedNextAirDate;
+    try {
+      if (map['next_air_date'] != null) {
+        parsedNextAirDate = DateTime.parse(map['next_air_date'].toString());
+      }
+    } catch (_) {}
+
+    // 1. RATING GÜVENLİĞİ: Hem int hem double kabul et
+    double parsedRating = 0.0;
+    try {
+      if (map['rating'] is num) {
+        parsedRating = (map['rating'] as num).toDouble();
+      } else if (map['rating'] is String) {
+        parsedRating = double.tryParse(map['rating']) ?? 0.0;
+      }
+    } catch (_) {}
 
     // 3. GENRES GÜVENLİĞİ
     List<String> parsedGenres = [];
@@ -139,6 +150,7 @@ class ItemModel {
       runtime: (map['runtime'] as num?)?.toInt(),
       seasonsData: parsedSeasonsData,
       rewatchCount: (map['rewatch_count'] as num?)?.toInt() ?? 0,
+      nextAirDate: parsedNextAirDate,
     );
   }
 
@@ -166,6 +178,7 @@ class ItemModel {
     Map<String, dynamic>? seasonsData,
     int? rewatchCount,
     bool? isSpoiler,
+    DateTime? nextAirDate,
   }) {
     return ItemModel(
       id: id ?? this.id,
@@ -190,6 +203,7 @@ class ItemModel {
       seasonsData: seasonsData ?? this.seasonsData,
       rewatchCount: rewatchCount ?? this.rewatchCount,
       isSpoiler: isSpoiler ?? this.isSpoiler,
+      nextAirDate: nextAirDate ?? this.nextAirDate,
     );
   }
 

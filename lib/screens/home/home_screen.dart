@@ -7,11 +7,13 @@ import '../../core/app_strings.dart';
 import '../../services/database_service.dart';
 import '../../models/category_model.dart';
 import '../../models/category_type.dart';
+import '../../models/item_model.dart';
 import '../../models/rating_type.dart';
 import '../../services/settings_service.dart';
 import '../../providers/theme_provider.dart';
 import '../settings/settings_screen.dart';
 import '../discover/discover_screen.dart';
+import '../calendar/calendar_screen.dart';
 import '../details/category_detail_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,13 +33,44 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = "";
   CategorySort _currentSort = CategorySort.newest;
   final TextEditingController _searchController = TextEditingController();
+  
+  ItemModel? _closestUpcomingItem;
+  bool _isLoadingUpcoming = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserPreferences();
+    _fetchUpcoming();
   }
 
+  Future<void> _fetchUpcoming() async {
+    try {
+      // Önce senkronize et (eski eklenmiş dizilerin tarihleri güncellensin)
+      // UI'ı bloklamamak için await yapmıyor, arkada çalışmasını sağlıyoruz.
+      _dbService.syncUpcomingTvShows().then((_) async {
+        if (mounted) {
+           final items = await _dbService.getUpcomingItems();
+           if (mounted) {
+             setState(() {
+               _closestUpcomingItem = items.isNotEmpty ? items.first : null;
+               _isLoadingUpcoming = false;
+             });
+           }
+        }
+      });
+      
+      final items = await _dbService.getUpcomingItems();
+      if (mounted) {
+        setState(() {
+          _closestUpcomingItem = items.isNotEmpty ? items.first : null;
+          _isLoadingUpcoming = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingUpcoming = false);
+    }
+  }
   void _loadUserPreferences() async {
     final settingsData = await SettingsService().getUserData();
     if (settingsData != null && settingsData['preferences'] != null && mounted) {
@@ -63,6 +96,12 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildSortMenuItem(CategorySort.nameDesc, 'İsim (Z - A)', Icons.sort_by_alpha_rounded),
               _buildSortMenuItem(CategorySort.type, 'Kategori Türü', Icons.category_rounded),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.calendar_month_rounded),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()));
+            },
           ),
           IconButton(
             icon: const Icon(Icons.explore_outlined),
@@ -101,6 +140,69 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          
+          // ─── YAKLAŞANLAR WIDGET'I (DASHBOARD) ───
+          if (!_isLoadingUpcoming && _closestUpcomingItem != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceMd, vertical: 8),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()));
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+                        Theme.of(context).colorScheme.primary,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.event, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              AppStrings.isEn ? 'Next Up:' : 'Yaklaşan:',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                            Text(
+                              _closestUpcomingItem!.title,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${_closestUpcomingItem!.nextAirDate!.difference(DateTime.now()).inDays} gün',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // ─── KATEGORİ LİSTESİ ───
           Expanded(
@@ -280,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aynı listeye yapıştıramazsınız!')));
                         return;
                       }
-                      
+                      if (!mounted) return;
                       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
                       final err = await _dbService.pasteCategoryItems(copiedId, category.id);
                       if (mounted) {

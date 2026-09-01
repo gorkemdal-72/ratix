@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/category_model.dart';
 import '../models/item_model.dart';
 import 'search_service.dart';
+import 'push_notification_service.dart';
 
 class DatabaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -376,6 +377,120 @@ class DatabaseService {
     } catch (e) {
       debugPrint('[DatabaseService] getItemWithCategory ERROR: $e');
       return null;
+    }
+  }
+
+  // YENİ: Takvim için yaklaşan öğeleri getirir
+  Future<List<ItemModel>> getUpcomingItems() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      final res = await _supabase
+          .from('items')
+          .select('*, categories(id, name, icon, category_type)')
+          .eq('user_id', userId)
+          .gte('next_air_date', now)
+          .order('next_air_date', ascending: true);
+
+      final List<ItemModel> items = [];
+      for (final map in res) {
+        try {
+          items.add(ItemModel.fromMap(map, map['id'] as String));
+        } catch (e) {
+          debugPrint('[DatabaseService] getUpcomingItems item parse error: $e');
+        }
+      }
+      return items;
+    } catch (e) {
+      debugPrint('[DatabaseService] getUpcomingItems ERROR: $e');
+      return [];
+    }
+  }
+
+  // Senkronizasyon: Eksik veya geçmiş tarihli dizileri günceller
+  Future<void> syncUpcomingTvShows() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      // media_type 'tv' olan, watch_status 'watching' veya 'watchlist' olan, 
+      // ve next_air_date ya null ya da geçmiş olan kayıtları bulalım
+      final res = await _supabase
+          .from('items')
+          .select('id, external_id, next_air_date')
+          .eq('user_id', userId)
+          .eq('media_type', 'tv')
+          .or('next_air_date.is.null,next_air_date.lt.$now');
+
+      for (var row in res) {
+        final itemId = row['id'] as String;
+        final externalId = row['external_id'] as String?;
+        if (externalId == null || externalId.isEmpty) continue;
+
+        final details = await SearchService.instance.getTvDetails(externalId);
+        if (details == null) continue; // Hata durumunda atla, silme
+        final newAirDate = details.nextEpisodeToAirDate;
+
+        if (newAirDate != null && newAirDate.isAfter(DateTime.now())) {
+          await _supabase
+              .from('items')
+              .update({'next_air_date': newAirDate.toIso8601String()})
+              .eq('id', itemId);
+              
+          // Bildirimleri zamanla (5, 3 ve 1 gün kala)
+          final showName = row['title'] as String? ?? 'Bir dizi';
+          final epNum = details.nextEpisodeNumber ?? 0;
+          final sNum = details.nextSeasonNumber ?? 0;
+          final extIdInt = int.tryParse(externalId) ?? externalId.hashCode;
+          
+          final notificationService = PushNotificationService();
+          
+          // 5 gün kala
+          final date5 = newAirDate.subtract(const Duration(days: 5));
+          if (date5.isAfter(DateTime.now())) {
+             notificationService.scheduleEpisodeNotification(
+                id: (extIdInt % 100000) * 10 + 5,
+                title: '$showName Yaklaşıyor!',
+                body: 'Yeni bölüm ($sNum. Sezon $epNum. Bölüm) 5 gün sonra yayınlanacak.',
+                scheduledDate: date5,
+             );
+          }
+          
+          // 3 gün kala
+          final date3 = newAirDate.subtract(const Duration(days: 3));
+          if (date3.isAfter(DateTime.now())) {
+             notificationService.scheduleEpisodeNotification(
+                id: (extIdInt % 100000) * 10 + 3,
+                title: '$showName Yaklaşıyor!',
+                body: 'Yeni bölüme sadece 3 gün kaldı!',
+                scheduledDate: date3,
+             );
+          }
+          
+          // 1 gün kala
+          final date1 = newAirDate.subtract(const Duration(days: 1));
+          if (date1.isAfter(DateTime.now())) {
+             notificationService.scheduleEpisodeNotification(
+                id: (extIdInt % 100000) * 10 + 1,
+                title: '$showName Yarın Çıkıyor!',
+                body: 'Hazır mısın? Yeni bölüm yarın yayınlanacak!',
+                scheduledDate: date1,
+             );
+          }
+
+        } else {
+          // Eğer artık gelecek bölüm yoksa null yap (eski veriyi temizle)
+          await _supabase
+              .from('items')
+              .update({'next_air_date': null})
+              .eq('id', itemId);
+        }
+      }
+    } catch (e) {
+      debugPrint('[DatabaseService] syncUpcomingTvShows ERROR: $e');
     }
   }
 

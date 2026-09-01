@@ -73,6 +73,7 @@ class SearchService {
           mediaType: mediaType,
           genres: genreIds,
           overview: item['overview'] as String?,
+          fullDate: date.isNotEmpty ? date : null,
         );
       }).where((r) => r.title.isNotEmpty).toList();
     } catch (e) {
@@ -195,6 +196,7 @@ class SearchService {
           mediaType: mType,
           genres: genreIds,
           overview: item['overview'] as String?,
+          fullDate: date.isNotEmpty ? date : null,
         );
       }).where((r) => r.title.isNotEmpty).toList();
     } catch (e) {
@@ -243,6 +245,18 @@ class SearchService {
           ));
         }
       }
+      
+      DateTime? nextAirDate;
+      int? nextSeasonNum;
+      int? nextEpNum;
+
+      if (data['next_episode_to_air'] != null) {
+        if (data['next_episode_to_air']['air_date'] != null) {
+          nextAirDate = DateTime.tryParse(data['next_episode_to_air']['air_date'].toString());
+        }
+        nextSeasonNum = (data['next_episode_to_air']['season_number'] as num?)?.toInt();
+        nextEpNum = (data['next_episode_to_air']['episode_number'] as num?)?.toInt();
+      }
 
       return TvShowDetails(
         tvId: tvId,
@@ -251,6 +265,9 @@ class SearchService {
         numberOfEpisodes: (data['number_of_episodes'] as num?)?.toInt() ?? 0,
         avgEpisodeRuntime: avgRuntime,
         seasons: seasons,
+        nextEpisodeToAirDate: nextAirDate,
+        nextSeasonNumber: nextSeasonNum,
+        nextEpisodeNumber: nextEpNum,
       );
     } catch (e) {
       debugPrint('[SearchService] getTvDetails HATA: $e');
@@ -266,7 +283,7 @@ class SearchService {
 
       final url = Uri.https('api.themoviedb.org', '/3/tv/$tvId/season/$seasonNumber', {
         'api_key': key,
-        'language': 'tr-TR',
+        'language': 'en-US', // Orijinal isimleri almak için (TR'de "10. Bölüm" dönüyor)
       });
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
@@ -275,12 +292,18 @@ class SearchService {
       final episodesRaw = (data['episodes'] as List?) ?? [];
 
       return episodesRaw.map((ep) {
+        DateTime? parsedAirDate;
+        if (ep['air_date'] != null) {
+          parsedAirDate = DateTime.tryParse(ep['air_date'].toString());
+        }
+
         return TvEpisodeInfo(
           episodeNumber: (ep['episode_number'] as num?)?.toInt() ?? 0,
           seasonNumber: (ep['season_number'] as num?)?.toInt() ?? seasonNumber,
           name: (ep['name'] as String?) ?? '${ep['episode_number']}. Bölüm',
           runtime: (ep['runtime'] as num?)?.toInt(),
           overview: ep['overview'] as String?,
+          airDate: parsedAirDate,
         );
       }).toList();
     } catch (e) {
@@ -562,6 +585,7 @@ class SearchResult {
   final List<String> genres;
   final String? author;
   final String? overview;
+  final String? fullDate; // YENİ: Tam tarih (YYYY-MM-DD)
 
   const SearchResult({
     required this.externalId,
@@ -573,6 +597,7 @@ class SearchResult {
     this.genres = const [],
     this.author,
     this.overview,
+    this.fullDate,
   });
 }
 
@@ -584,6 +609,9 @@ class TvShowDetails {
   final int numberOfEpisodes;
   final int avgEpisodeRuntime;
   final List<TvSeasonInfo> seasons;
+  final DateTime? nextEpisodeToAirDate;
+  final int? nextSeasonNumber;
+  final int? nextEpisodeNumber;
 
   TvShowDetails({
     required this.tvId,
@@ -592,6 +620,9 @@ class TvShowDetails {
     required this.numberOfEpisodes,
     required this.avgEpisodeRuntime,
     required this.seasons,
+    this.nextEpisodeToAirDate,
+    this.nextSeasonNumber,
+    this.nextEpisodeNumber,
   });
 }
 
@@ -612,17 +643,19 @@ class TvSeasonInfo {
 }
 
 class TvEpisodeInfo {
-  final int episodeNumber;
   final int seasonNumber;
+  final int episodeNumber;
   final String name;
   final int? runtime;
   final String? overview;
+  final DateTime? airDate;
 
   TvEpisodeInfo({
-    required this.episodeNumber,
     required this.seasonNumber,
+    required this.episodeNumber,
     required this.name,
     this.runtime,
     this.overview,
+    this.airDate,
   });
 }

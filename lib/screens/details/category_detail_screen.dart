@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../widgets/spoiler_shield.dart';
 import '../../widgets/watch_providers_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1370,10 +1369,22 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
               final reviewText = reviewCtrl.text.trim().isEmpty ? null : reviewCtrl.text.trim();
               
               int? fetchedRuntime;
+              DateTime? nextAirDate;
+
               if (currentSeasonRes != null && currentSeasonRes!['calculated_runtime'] != null) {
                 fetchedRuntime = currentSeasonRes!['calculated_runtime'] as int?;
               } else if (r.externalId.isNotEmpty && r.mediaType.isNotEmpty) {
                  fetchedRuntime = await SearchService.instance.getTmdbRuntime(r.mediaType, r.externalId);
+              }
+              
+              if (r.mediaType == 'tv' && r.externalId.isNotEmpty) {
+                final details = await SearchService.instance.getTvDetails(r.externalId);
+                nextAirDate = details?.nextEpisodeToAirDate;
+              } else if (r.mediaType == 'movie' && r.fullDate != null) {
+                final rDate = DateTime.tryParse(r.fullDate!);
+                if (rDate != null && rDate.isAfter(DateTime.now())) {
+                  nextAirDate = rDate;
+                }
               }
 
               final item = ItemModel(
@@ -1383,6 +1394,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 author: r.author, overview: r.overview, review: reviewText,
                 runtime: fetchedRuntime, categoryId: _activeCategoryId,
                 seasonsData: currentSeasonRes,
+                nextAirDate: nextAirDate,
               );
               Navigator.pop(ctx);
               final String newId = await _dbService.addItem(_activeCategoryId, item);

@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../screens/social/post_detail_screen.dart';
 import '../screens/social/notifications_screen.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import '../screens/admin/admin_reports_screen.dart';
 
 // Arka planda gelen mesajları işlemek için top-level fonksiyon
@@ -59,6 +62,11 @@ class PushNotificationService {
     if (_initialized) return;
 
     try {
+      // Timezone başlat
+      tz.initializeTimeZones();
+      final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timeZoneInfo.identifier));
+
       // Background handler'ı kaydet
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
@@ -153,6 +161,37 @@ class PushNotificationService {
       _initialized = true;
     } catch (e) {
       debugPrint('PushNotificationService başlatılamadı: $e');
+    }
+  }
+
+  Future<void> scheduleEpisodeNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    if (scheduledDate.isBefore(DateTime.now())) return;
+    
+    try {
+      await _localNotificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'upcoming_episodes',
+            'Yaklaşan Bölümler',
+            channelDescription: 'Dizilerin yeni bölümleri için hatırlatıcılar',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+      debugPrint('Bildirim zamanlandı: $title -> $scheduledDate (ID: $id)');
+    } catch (e) {
+      debugPrint('Zamanlanmış bildirim hatası: $e');
     }
   }
 

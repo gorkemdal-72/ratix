@@ -74,13 +74,24 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
               });
             }
           } else {
-            // Varsayılan olarak tüm diziyi seçili başlat
+            // Varsayılan olarak çıkmış olan tüm diziyi seçili başlat
             _isAllSelected = true;
             _selectedEpisodes.clear();
             for (final season in details.seasons) {
               final sNum = season.seasonNumber;
-              final epCount = season.episodeCount;
-              _selectedEpisodes[sNum] = List.generate(epCount, (index) => index + 1).toSet();
+              int releasedEpCount = season.episodeCount;
+              if (details.nextSeasonNumber != null) {
+                if (sNum > details.nextSeasonNumber!) {
+                  releasedEpCount = 0;
+                } else if (sNum == details.nextSeasonNumber!) {
+                  releasedEpCount = (details.nextEpisodeNumber ?? 1) - 1;
+                }
+              }
+              if (releasedEpCount > 0) {
+                _selectedEpisodes[sNum] = List.generate(releasedEpCount, (index) => index + 1).toSet();
+              } else {
+                _selectedEpisodes[sNum] = {};
+              }
             }
           }
         }
@@ -103,8 +114,21 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
       if (select) {
         for (final season in _tvDetails!.seasons) {
           final sNum = season.seasonNumber;
-          final epCount = season.episodeCount;
-          _selectedEpisodes[sNum] = List.generate(epCount, (index) => index + 1).toSet();
+          int releasedEpCount = season.episodeCount;
+          
+          if (_tvDetails!.nextSeasonNumber != null) {
+            if (sNum > _tvDetails!.nextSeasonNumber!) {
+              releasedEpCount = 0;
+            } else if (sNum == _tvDetails!.nextSeasonNumber!) {
+              releasedEpCount = (_tvDetails!.nextEpisodeNumber ?? 1) - 1;
+            }
+          }
+
+          if (releasedEpCount > 0) {
+            _selectedEpisodes[sNum] = List.generate(releasedEpCount, (index) => index + 1).toSet();
+          } else {
+            _selectedEpisodes[sNum] = {};
+          }
         }
       }
     });
@@ -117,8 +141,19 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
         // Önceki tüm sezonların tüm bölümlerini de otomatik seç
         for (final season in _tvDetails!.seasons) {
           if (season.seasonNumber <= seasonNum) {
-            _selectedEpisodes[season.seasonNumber] =
-                List.generate(season.episodeCount, (index) => index + 1).toSet();
+            int releasedEpCount = season.episodeCount;
+            if (_tvDetails!.nextSeasonNumber != null) {
+              if (season.seasonNumber > _tvDetails!.nextSeasonNumber!) {
+                releasedEpCount = 0;
+              } else if (season.seasonNumber == _tvDetails!.nextSeasonNumber!) {
+                releasedEpCount = (_tvDetails!.nextEpisodeNumber ?? 1) - 1;
+              }
+            }
+            if (releasedEpCount > 0) {
+              _selectedEpisodes[season.seasonNumber] = List.generate(releasedEpCount, (index) => index + 1).toSet();
+            } else {
+              _selectedEpisodes[season.seasonNumber] = {};
+            }
           }
         }
       } else {
@@ -136,8 +171,19 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
         // 1. Önceki tüm sezonların tüm bölümlerini otomatik seç
         for (final season in _tvDetails!.seasons) {
           if (season.seasonNumber < seasonNum) {
-            _selectedEpisodes[season.seasonNumber] =
-                List.generate(season.episodeCount, (index) => index + 1).toSet();
+            int releasedEpCount = season.episodeCount;
+            if (_tvDetails!.nextSeasonNumber != null) {
+              if (season.seasonNumber > _tvDetails!.nextSeasonNumber!) {
+                releasedEpCount = 0;
+              } else if (season.seasonNumber == _tvDetails!.nextSeasonNumber!) {
+                releasedEpCount = (_tvDetails!.nextEpisodeNumber ?? 1) - 1;
+              }
+            }
+            if (releasedEpCount > 0) {
+              _selectedEpisodes[season.seasonNumber] = List.generate(releasedEpCount, (index) => index + 1).toSet();
+            } else {
+              _selectedEpisodes[season.seasonNumber] = {};
+            }
           }
         }
         // 2. Mevcut sezonun 1. bölümünden bu bölüme (epNum) kadar olan tüm bölümleri otomatik seç
@@ -353,11 +399,20 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
                           // ─── SEZONLAR LİSTESİ ───
                           ..._tvDetails!.seasons.map((season) {
                             final sNum = season.seasonNumber;
-                            final epCount = season.episodeCount;
+                            
+                            int releasedEpCount = season.episodeCount;
+                            if (_tvDetails!.nextSeasonNumber != null) {
+                              if (sNum > _tvDetails!.nextSeasonNumber!) {
+                                releasedEpCount = 0;
+                              } else if (sNum == _tvDetails!.nextSeasonNumber!) {
+                                releasedEpCount = (_tvDetails!.nextEpisodeNumber ?? 1) - 1;
+                              }
+                            }
+                            
                             final selectedSet = _selectedEpisodes[sNum] ?? {};
                             final selectedCount = selectedSet.length;
-                            final isSeasonAllSelected = selectedCount == epCount && epCount > 0;
-                            final isSeasonPartial = selectedCount > 0 && selectedCount < epCount;
+                            final isSeasonAllSelected = selectedCount == releasedEpCount && releasedEpCount > 0;
+                            final isSeasonPartial = selectedCount > 0 && selectedCount < releasedEpCount;
                             final isExpanded = _expandedSeasons.contains(sNum);
 
                             return Card(
@@ -393,7 +448,7 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
                                   tristate: true,
                                   activeColor: primaryGreen,
                                   onChanged: (val) {
-                                    _toggleSeason(sNum, epCount, val == true);
+                                    _toggleSeason(sNum, releasedEpCount, val == true);
                                   },
                                 ),
                                 title: Text(
@@ -401,7 +456,7 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 subtitle: Text(
-                                  '$selectedCount / $epCount Bölüm Seçildi',
+                                  '$selectedCount / $releasedEpCount Bölüm Seçildi',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -419,19 +474,57 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
                                         else if (_seasonEpisodesCache.containsKey(sNum))
                                           ..._seasonEpisodesCache[sNum]!.map((ep) {
                                             final isEpSelected = selectedSet.contains(ep.episodeNumber);
+                                            
+                                            // Çıkmamış bölümleri engelle
+                                            bool isUnreleased = false;
+                                            if (ep.airDate != null && ep.airDate!.isAfter(DateTime.now())) {
+                                              isUnreleased = true;
+                                            } else if (ep.airDate == null && _tvDetails!.nextSeasonNumber != null) {
+                                              if (sNum > _tvDetails!.nextSeasonNumber!) {
+                                                isUnreleased = true;
+                                              } else if (sNum == _tvDetails!.nextSeasonNumber! && ep.episodeNumber >= _tvDetails!.nextEpisodeNumber!) {
+                                                isUnreleased = true;
+                                              }
+                                            }
+                                            
+                                            // İsim formatlama
+                                            String displayName = ep.name;
+                                            if (displayName.toLowerCase() == 'episode ${ep.episodeNumber}' || 
+                                                displayName.toLowerCase() == '${ep.episodeNumber}. bölüm') {
+                                              displayName = '${ep.episodeNumber}. Bölüm';
+                                            } else {
+                                              displayName = '${ep.episodeNumber}. $displayName';
+                                            }
+
                                             return CheckboxListTile(
                                               dense: true,
-                                              title: Text('${ep.episodeNumber}. ${ep.name}'),
-                                              subtitle: ep.runtime != null ? Text('${ep.runtime} dk') : null,
-                                              value: isEpSelected,
+                                              title: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      displayName,
+                                                      style: TextStyle(
+                                                        color: isUnreleased ? Colors.grey : null,
+                                                        fontStyle: isUnreleased ? FontStyle.italic : null,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (isUnreleased)
+                                                    const Icon(Icons.lock_clock, size: 14, color: Colors.grey),
+                                                ],
+                                              ),
+                                              subtitle: ep.runtime != null 
+                                                  ? Text('${ep.runtime} dk', style: TextStyle(color: isUnreleased ? Colors.grey : null)) 
+                                                  : null,
+                                              value: isUnreleased ? false : isEpSelected,
                                               activeColor: primaryGreen,
-                                              onChanged: (val) {
-                                                _toggleEpisode(sNum, ep.episodeNumber, epCount, val == true);
+                                              onChanged: isUnreleased ? null : (val) {
+                                                _toggleEpisode(sNum, ep.episodeNumber, releasedEpCount, val == true);
                                               },
                                             );
                                           })
                                         else
-                                          ...List.generate(epCount, (idx) {
+                                          ...List.generate(releasedEpCount, (idx) {
                                             final epNum = idx + 1;
                                             final isEpSelected = selectedSet.contains(epNum);
                                             return CheckboxListTile(
@@ -440,7 +533,7 @@ class _SeasonEpisodeSelectorSheetState extends State<SeasonEpisodeSelectorSheet>
                                               value: isEpSelected,
                                               activeColor: primaryGreen,
                                               onChanged: (val) {
-                                                _toggleEpisode(sNum, epNum, epCount, val == true);
+                                                _toggleEpisode(sNum, epNum, releasedEpCount, val == true);
                                               },
                                             );
                                           }),
