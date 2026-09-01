@@ -314,6 +314,15 @@ class DatabaseService {
       debugPrint('[DatabaseService] updateItemRuntime ERROR: $e');
     }
   }
+  // YENİ: Tekrar İzleme (Rewatch) Sayısını Güncelleme (Artırma/Azaltma)
+  Future<void> updateRewatchCount(String itemId, int newCount) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    
+    await _supabase.from('items').update({
+      'rewatch_count': newCount < 0 ? 0 : newCount,
+    }).eq('id', itemId).eq('user_id', userId);
+  }
 
   final Set<String> _backfillingItemIds = {};
 

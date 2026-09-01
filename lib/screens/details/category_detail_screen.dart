@@ -383,6 +383,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 : _dbService.getMainCategoryItemsStream(widget.category.id),
             builder: (ctx, snap) {
               if (!snap.hasData && snap.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 3));
+              if (snap.hasError) {
+                debugPrint('StreamBuilder ERROR: ${snap.error}');
+              }
               if (!snap.hasData) return _emptyState();
               var items = snap.data!;
               if (_searchQuery.isNotEmpty) items = items.where((i) => i.title.toLowerCase().contains(_searchQuery)).toList();
@@ -688,6 +691,61 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                         ),
                       ),
                     ],
+                    // ─── İLERLEME ÇUBUĞU (SADECE BÖLÜMÜ OLAN DİZİLER İÇİN) ───
+                    Builder(builder: (context) {
+                      final isTv = item.mediaType == 'tv' || item.mediaType == 'tvShow' || widget.category.categoryType == CategoryType.tvShow;
+                      final total = item.totalEpisodesCount;
+                      final selected = item.selectedEpisodesCount;
+                      final progress = total > 0 ? (selected / total).clamp(0.0, 1.0) : (item.isAllSeasonsSelected ? 1.0 : 0.0);
+                      final isCompleted = item.watchStatus == 'watched' || (isTv && progress >= 1.0);
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isTv && total > 0) ...[
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: 6,
+                                backgroundColor: Colors.grey.withValues(alpha: 0.2),
+                                color: isCompleted ? AppTheme.success : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                          
+                          // ─── TEKRAR İZLE/TÜKET BUTONU (TÜM İÇERİKLER İÇİN) ───
+                          if (isCompleted || item.rewatchCount > 0) ...[
+                            const SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () => _showRewatchDialog(context, item),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.replay_rounded, size: 14, color: Colors.purple),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      item.rewatchCount > 0 
+                                          ? '🔁 ${item.rewatchCount}. Kez (Düzenle)' 
+                                          : (AppStrings.isEn ? 'Rewatch' : 'Tekrar Tüket/İzle'),
+                                      style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.bold)
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ]
+                        ],
+                      );
+                    }),
                     const SizedBox(height: 8),
                     Text(
                       '${AppStrings.isEn ? 'Added' : 'Eklendi'}: ${item.createdAt.day.toString().padLeft(2, '0')}.${item.createdAt.month.toString().padLeft(2, '0')}.${item.createdAt.year}',
@@ -789,6 +847,77 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [Text(d, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: color, fontSize: 14)), const SizedBox(width: 2), Icon(Icons.star_rounded, color: color, size: 16)],
+      ),
+    );
+  }
+
+  void _showRewatchDialog(BuildContext context, ItemModel item) {
+    int currentCount = item.rewatchCount;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text(AppStrings.isEn ? 'Rewatch Options' : 'Tekrar Tüketme (Rewatch)'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  AppStrings.isEn 
+                      ? 'How many times have you completely rewatched/reread this?' 
+                      : 'Bu içeriği baştan sona kaç kez tekrar tükettin?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: AppTheme.danger, size: 32),
+                      onPressed: () {
+                        if (currentCount > 0) {
+                          setState(() => currentCount--);
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      currentCount.toString(),
+                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: AppTheme.success, size: 32),
+                      onPressed: () {
+                        setState(() => currentCount++);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (currentCount == 0 && item.rewatchCount > 0)
+                  Text(
+                    AppStrings.isEn ? 'This will remove the rewatch badge.' : 'Tekrar izleme rozetini kaldırır.',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(AppStrings.isEn ? 'Cancel' : 'İptal'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _dbService.updateRewatchCount(item.id, currentCount);
+                },
+                child: Text(AppStrings.isEn ? 'Save' : 'Kaydet'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

@@ -22,6 +22,7 @@ class ItemModel {
   final String? categoryId;   // Kategori ID'si
   final int? runtime;         // Toplam izleme süresi (dakika)
   final Map<String, dynamic>? seasonsData; // Dizi sezon ve bölüm seçim verileri
+  final int rewatchCount;     // YENİ: Tekrar izleme sayısı
 
   ItemModel({
     required this.id,
@@ -45,6 +46,7 @@ class ItemModel {
     this.overview,
     this.runtime,
     this.seasonsData,
+    this.rewatchCount = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -67,6 +69,7 @@ class ItemModel {
       'category_id': categoryId,
       'runtime': runtime,
       'seasons_data': seasonsData,
+      'rewatch_count': rewatchCount,
     };
   }
 
@@ -118,8 +121,8 @@ class ItemModel {
       createdAt: parsedDate,
       // Yeni alanlar — null-safe
       posterUrl: (map['posterUrl'] ?? map['poster_url']) as String?,
-      year: map['year'] as int?,
-      externalId: (map['externalId'] ?? map['external_id']) as String?,
+      year: (map['year'] as num?)?.toInt(),
+      externalId: (map['externalId'] ?? map['external_id'])?.toString(),
       mediaType: (map['mediaType'] ?? map['media_type']) as String?,
       genres: parsedGenres,
       watchStatus: (map['watchStatus'] ?? map['watch_status']) as String? ?? 'watched',
@@ -129,8 +132,9 @@ class ItemModel {
       categoryIcon: map['categories']?['icon'] as String?,
       categoryName: map['categories']?['name'] as String?,
       categoryId: map['category_id'] as String?,
-      runtime: map['runtime'] as int?,
+      runtime: (map['runtime'] as num?)?.toInt(),
       seasonsData: parsedSeasonsData,
+      rewatchCount: (map['rewatch_count'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -156,6 +160,7 @@ class ItemModel {
     String? categoryId,
     int? runtime,
     Map<String, dynamic>? seasonsData,
+    int? rewatchCount,
   }) {
     return ItemModel(
       id: id ?? this.id,
@@ -178,6 +183,7 @@ class ItemModel {
       categoryId: categoryId ?? this.categoryId,
       runtime: runtime ?? this.runtime,
       seasonsData: seasonsData ?? this.seasonsData,
+      rewatchCount: rewatchCount ?? this.rewatchCount,
     );
   }
 

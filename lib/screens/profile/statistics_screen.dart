@@ -108,7 +108,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           }
         }
 
-        final typeName = item.mediaType ?? CategoryType.custom.name;
+        String typeName = item.mediaType ?? CategoryType.custom.name;
+        // FIX: TMDB saves tv shows as 'tv', map it to 'tvShow' enum name
+        if (typeName == 'tv') {
+          typeName = CategoryType.tvShow.name;
+        }
+
         typeCount[typeName] = (typeCount[typeName] ?? 0) + 1;
         
         if (item.createdAt.year.toString() == currentYear) {
@@ -192,6 +197,24 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     goalsJson.add(jsonEncode(newGoal));
     await prefs.setStringList('user_custom_goals', goalsJson);
     
+    _fetchStatistics();
+  }
+
+  // YENİ: Hedef Silme Fonksiyonu
+  Future<void> _deleteGoal(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final goalsJson = prefs.getStringList('user_custom_goals') ?? [];
+    
+    goalsJson.removeWhere((g) {
+      try {
+        final map = jsonDecode(g);
+        return map['id'] == id;
+      } catch (_) {
+        return false;
+      }
+    });
+    
+    await prefs.setStringList('user_custom_goals', goalsJson);
     _fetchStatistics();
   }
 
@@ -453,7 +476,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               Expanded(
                 child: Text('${goal.year} ${AppStrings.isEn ? 'Goal:' : 'Yılında'} ${goal.targetCount} $typeName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
-              Text('${goal.currentCount} / ${goal.targetCount}', style: TextStyle(color: Colors.grey.shade600)),
+              Text('${goal.currentCount} / ${goal.targetCount}', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+              const SizedBox(width: 8),
+              // YENİ: Silme Butonu
+              GestureDetector(
+                onTap: () => _deleteGoal(goal.id),
+                child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+              ),
             ],
           ),
           const SizedBox(height: 12),
