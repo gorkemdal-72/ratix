@@ -1346,6 +1346,9 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
   List<SearchResult> _results = [];
   bool _loading = false;
   Timer? _debounce;
+  BookSearchMode _bookSearchMode = BookSearchMode.all;
+
+  bool get _isBook => widget.category.categoryType == CategoryType.book;
 
   @override
   void dispose() {
@@ -1373,12 +1376,42 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
     _currentQuery = q;
     if (mounted) setState(() { _loading = true; });
     
-    final res = await SearchService.instance.search(widget.category.categoryType, q);
+    final res = await SearchService.instance.search(
+      widget.category.categoryType, 
+      q,
+      bookMode: _bookSearchMode,
+    );
     
     // Eğer yanıt geldiğinde kullanıcı başka bir şey aramışsa, bu yanıtı (stale) çöpe at
     if (_currentQuery != q) return;
     
     if (mounted) setState(() { _results = res; _loading = false; });
+  }
+
+  void _onBookModeChanged(BookSearchMode mode) {
+    setState(() { _bookSearchMode = mode; });
+    if (_ctrl.text.isNotEmpty) {
+      _search(_ctrl.text);
+    }
+  }
+
+  Widget _buildModeChip(String label, BookSearchMode mode, IconData icon) {
+    final isSelected = _bookSearchMode == mode;
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: isSelected ? Theme.of(context).colorScheme.onPrimary : null),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Theme.of(context).colorScheme.onPrimary : null)),
+        ],
+      ),
+      selected: isSelected,
+      onSelected: (_) => _onBookModeChanged(mode),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
   }
 
   @override
@@ -1430,6 +1463,19 @@ class _SearchBottomSheetState extends State<_SearchBottomSheet> {
               ],
             ),
           ),
+          if (_isBook)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              child: Row(
+                children: [
+                  _buildModeChip('Tümü', BookSearchMode.all, Icons.search),
+                  const SizedBox(width: 8),
+                  _buildModeChip('Kitap Adı', BookSearchMode.title, Icons.menu_book_rounded),
+                  const SizedBox(width: 8),
+                  _buildModeChip('Yazar', BookSearchMode.author, Icons.person_rounded),
+                ],
+              ),
+            ),
           const Divider(height: 1),
           if (_loading) const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_results.isEmpty && _ctrl.text.isNotEmpty)

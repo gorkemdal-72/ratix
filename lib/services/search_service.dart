@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import '../models/category_type.dart';
 import '../core/api_keys.dart';
 
+/// Kitap arama modu: Tümü, Kitap Adı, Yazar
+enum BookSearchMode { all, title, author }
+
 /// Tüm harici API aramalarını yöneten servis.
 /// Her kategori tipi için doğru API'yi seçer.
 class SearchService {
@@ -12,16 +15,17 @@ class SearchService {
 
   // ─── ANA ARAMA METHODu ───
   /// CategoryType'a göre doğru API'yi çağırır.
-  Future<List<SearchResult>> search(CategoryType type, String query) async {
+  /// Kitap aramaları için [bookMode] ile arama tipi seçilebilir.
+  Future<List<SearchResult>> search(CategoryType type, String query, {BookSearchMode bookMode = BookSearchMode.all}) async {
     if (query.trim().isEmpty) return [];
-    final q = Uri.encodeQueryComponent(query.trim());
+    final q = query.trim();
     switch (type) {
       case CategoryType.movie:
         return _searchTmdb(q, 'movie');
       case CategoryType.tvShow:
         return _searchTmdb(q, 'tv');
       case CategoryType.book:
-        return _searchBooks(q);
+        return _searchBooks(q, bookMode);
       case CategoryType.game:
         return _searchGames(q);
       case CategoryType.music:
@@ -31,16 +35,17 @@ class SearchService {
     }
   }
 
-  // ─── TMDB: Film & Dizi ───
+  // ─── TMDB: Film & Dizi (orijinal isimle arama) ───
   Future<List<SearchResult>> _searchTmdb(String query, String mediaType) async {
     try {
       final key = ApiKeys.tmdb;
       if (key == 'BURAYA_TMDB_KEY_YAZAR') return [];
 
-      final url = Uri.parse(
-        'https://api.themoviedb.org/3/search/$mediaType'
-        '?api_key=$key&query=$query&language=tr-TR&page=1',
-      );
+      final url = Uri.https('api.themoviedb.org', '/3/search/$mediaType', {
+        'api_key': key,
+        'query': query,
+        'page': '1',
+      });
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
 
@@ -48,7 +53,10 @@ class SearchService {
       final results = (data['results'] as List?) ?? [];
 
       return results.take(10).map((item) {
-        final title = (item['title'] ?? item['name'] ?? '') as String;
+        // Orijinal ismi göster (film: original_title, dizi: original_name)
+        final title = mediaType == 'movie'
+            ? (item['original_title'] ?? item['title'] ?? '') as String
+            : (item['original_name'] ?? item['name'] ?? '') as String;
         final date = (item['release_date'] ?? item['first_air_date'] ?? '') as String;
         final year = date.length >= 4 ? int.tryParse(date.substring(0, 4)) : null;
         final poster = item['poster_path'] != null
@@ -81,9 +89,10 @@ class SearchService {
       final key = ApiKeys.tmdb;
       if (key == 'BURAYA_TMDB_KEY_YAZAR') return null;
 
-      final url = Uri.parse(
-        'https://api.themoviedb.org/3/$mediaType/$id?api_key=$key&language=tr-TR',
-      );
+      final url = Uri.https('api.themoviedb.org', '/3/$mediaType/$id', {
+        'api_key': key,
+        'language': 'tr-TR',
+      });
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;
 
@@ -122,9 +131,10 @@ class SearchService {
       final key = ApiKeys.tmdb;
       if (key == 'BURAYA_TMDB_KEY_YAZAR') return null;
 
-      final url = Uri.parse(
-        'https://api.themoviedb.org/3/tv/$tvId?api_key=$key&language=tr-TR',
-      );
+      final url = Uri.https('api.themoviedb.org', '/3/tv/$tvId', {
+        'api_key': key,
+        'language': 'tr-TR',
+      });
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;
 
@@ -176,9 +186,10 @@ class SearchService {
       final key = ApiKeys.tmdb;
       if (key == 'BURAYA_TMDB_KEY_YAZAR') return [];
 
-      final url = Uri.parse(
-        'https://api.themoviedb.org/3/tv/$tvId/season/$seasonNumber?api_key=$key&language=tr-TR',
-      );
+      final url = Uri.https('api.themoviedb.org', '/3/tv/$tvId/season/$seasonNumber', {
+        'api_key': key,
+        'language': 'tr-TR',
+      });
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
 
@@ -200,10 +211,11 @@ class SearchService {
     }
   }
 
-  // ─── Kitap Arama (Google Books -> Fallback: OpenLibrary) ───
-  Future<List<SearchResult>> _searchBooks(String query) async {
+  // ─── Kitap Arama (Google Books → Fallback: OpenLibrary) ───
+  // TR sonuçlar önce gösterilir, EN sonuçlar alta düşer.
+  Future<List<SearchResult>> _searchBooks(String query, BookSearchMode mode) async {
     try {
-      final googleResults = await _searchGoogleBooks(query);
+      final googleResults = await _searchGoogleBooks(query, mode);
       if (googleResults.isNotEmpty) return googleResults;
     } catch (e) {
       debugPrint('[SearchService] Google Books Failed, falling back to OpenLibrary. Error: $e');
@@ -217,40 +229,55 @@ class SearchService {
     }
   }
 
-  Future<List<SearchResult>> _searchGoogleBooks(String query) async {
-    final q = Uri.encodeQueryComponent(query.trim());
-    String urlStr = 'https://www.googleapis.com/books/v1/volumes?q=$q&maxResults=10&printType=all';
-    
-    if (ApiKeys.googleBooksApiKey.isNotEmpty) {
-      urlStr += '&key=${ApiKeys.googleBooksApiKey}';
+  Future<List<SearchResult>> _searchGoogleBooks(String query, BookSearchMode mode) async {
+    // Arama moduna göre sorguları oluştur
+    List<Future<List<dynamic>>> futures;
+    switch (mode) {
+      case BookSearchMode.title:
+        // Sadece kitap adında ara (boşlukları hesaba katarak tırnak içine al)
+        futures = [_fetchGoogleBooksItems('intitle:"$query"', 20).catchError((_) => <dynamic>[])];
+        break;
+      case BookSearchMode.author:
+        // Sadece yazar adında ara (tırnak içine al ki İskender Pala gibi isimler bölünmesin)
+        futures = [_fetchGoogleBooksItems('inauthor:"$query"', 20).catchError((_) => <dynamic>[])];
+        break;
+      case BookSearchMode.all:
+        // Normal arama + yazar araması paralel
+        futures = [
+          _fetchGoogleBooksItems(query, 15).catchError((_) => <dynamic>[]),
+          _fetchGoogleBooksItems('inauthor:"$query"', 15).catchError((_) => <dynamic>[]),
+        ];
+        break;
     }
 
-    final res = await http.get(Uri.parse(urlStr), headers: {
-      'Accept': 'application/json',
-      'User-Agent': 'Ratix/4.0 (Flutter)',
-    }).timeout(const Duration(seconds: 15));
+    final responses = await Future.wait(futures);
+    final allItems = responses.expand((items) => items).toList();
 
-    if (res.statusCode != 200) {
-      throw Exception('HTTP ${res.statusCode}: ${res.body.length > 100 ? res.body.substring(0, 100) : res.body}');
-    }
+    // Parse ederken dil bilgisine göre TR/diğer olarak ayır, duplicate kaldır
+    final trResults = <SearchResult>[];
+    final otherResults = <SearchResult>[];
+    final seenIds = <String>{};
 
-    final data = json.decode(res.body) as Map<String, dynamic>;
-    final results = (data['items'] as List?) ?? [];
-
-    return results.map((item) {
+    for (final item in allItems) {
       final volInfo = (item['volumeInfo'] ?? {}) as Map<String, dynamic>;
       final title = (volInfo['title'] ?? '') as String;
+      if (title.isEmpty) continue;
+
+      final id = item['id']?.toString() ?? '';
+      if (!seenIds.add(id)) continue; // Duplicate atla
+
       final authors = (volInfo['authors'] as List?)?.join(', ');
       final publishedDate = volInfo['publishedDate'] as String?;
       final year = publishedDate != null && publishedDate.length >= 4
           ? int.tryParse(publishedDate.substring(0, 4))
           : null;
+      final lang = (volInfo['language'] as String?) ?? '';
 
       String? poster = volInfo['imageLinks']?['smallThumbnail'] as String?;
       poster ??= volInfo['imageLinks']?['thumbnail'] as String?;
 
-      return SearchResult(
-        externalId: item['id']?.toString() ?? '',
+      final result = SearchResult(
+        externalId: id,
         title: title,
         subtitle: authors,
         posterUrl: poster?.replaceAll('http:', 'https:'),
@@ -260,12 +287,51 @@ class SearchService {
         author: authors,
         overview: volInfo['description'] as String?,
       );
-    }).where((r) => r.title.isNotEmpty).toList();
+
+      // TR sonuçlar önce, diğerleri sonra
+      if (lang == 'tr') {
+        trResults.add(result);
+      } else {
+        otherResults.add(result);
+      }
+    }
+
+    // TR sonuçlar üstte, EN/diğer sonuçlar altta
+    return [...trResults, ...otherResults].take(20).toList();
+  }
+
+  /// Google Books API'den ham item listesini getirir.
+  Future<List<dynamic>> _fetchGoogleBooksItems(String query, int maxResults) async {
+    final params = <String, String>{
+      'q': query,
+      'maxResults': maxResults.toString(),
+      'printType': 'all',
+      'orderBy': 'relevance',
+    };
+    if (ApiKeys.googleBooksApiKey.isNotEmpty) {
+      params['key'] = ApiKeys.googleBooksApiKey;
+    }
+
+    final url = Uri.https('www.googleapis.com', '/books/v1/volumes', params);
+
+    final res = await http.get(url, headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'Ratix/4.0 (Flutter)',
+    }).timeout(const Duration(seconds: 15));
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
+
+    final data = json.decode(res.body) as Map<String, dynamic>;
+    return (data['items'] as List?) ?? [];
   }
 
   Future<List<SearchResult>> _searchOpenLibrary(String query) async {
-    final q = Uri.encodeQueryComponent(query.trim());
-    final url = Uri.parse('https://openlibrary.org/search.json?q=$q&limit=10');
+    final url = Uri.https('openlibrary.org', '/search.json', {
+      'q': query,
+      'limit': '10',
+    });
 
     final res = await http.get(url, headers: {
       'Accept': 'application/json',
@@ -307,9 +373,11 @@ class SearchService {
       final key = ApiKeys.rawg;
       if (key == 'BURAYA_RAWG_KEY_YAZAR') return [];
 
-      final url = Uri.parse(
-        'https://api.rawg.io/api/games?key=$key&search=$query&page_size=10',
-      );
+      final url = Uri.https('api.rawg.io', '/api/games', {
+        'key': key,
+        'search': query,
+        'page_size': '10',
+      });
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
 
@@ -344,42 +412,64 @@ class SearchService {
     }
   }
 
-  // ─── iTunes Search: Müzik (Key gerektirmez!) ───
+  // ─── iTunes Search: Müzik (TR + US mağaza, orijinal isimle) ───
   Future<List<SearchResult>> _searchMusic(String query) async {
     try {
-      final url = Uri.parse(
-        'https://itunes.apple.com/search?term=$query&entity=album&limit=10&country=US',
-      );
-      final res = await http.get(url).timeout(const Duration(seconds: 10));
-      if (res.statusCode != 200) return [];
+      // TR ve US mağazalardan paralel arama yap
+      final results = await Future.wait([
+        _searchItunes(query, 'TR').catchError((_) => <SearchResult>[]),
+        _searchItunes(query, 'US').catchError((_) => <SearchResult>[]),
+      ]);
 
-      final data = json.decode(res.body) as Map<String, dynamic>;
-      final results = (data['results'] as List?) ?? [];
+      final trResults = results[0];
+      final usResults = results[1];
 
-      return results.take(10).map((item) {
-        final releaseDate = item['releaseDate'] as String?;
-        final year = releaseDate != null && releaseDate.length >= 4
-            ? int.tryParse(releaseDate.substring(0, 4))
-            : null;
-        final poster = (item['artworkUrl100'] as String?)?.replaceAll('100x100', '200x200');
-
-        return SearchResult(
-          externalId: item['collectionId']?.toString() ?? '',
-          title: item['collectionName'] ?? item['trackName'] ?? '',
-          subtitle: item['artistName'] as String?,
-          posterUrl: poster,
-          year: year,
-          mediaType: 'music',
-          genres: item['primaryGenreName'] != null ? [item['primaryGenreName']] : [],
-          author: item['artistName'] as String?,
-          overview: null,
-        );
-      }).where((r) => r.title.isNotEmpty).toList();
+      // Birleştir, duplicate kaldır (collectionId bazlı)
+      final seenIds = <String>{};
+      final merged = <SearchResult>[];
+      for (final r in [...trResults, ...usResults]) {
+        if (seenIds.add(r.externalId)) merged.add(r);
+      }
+      return merged.take(10).toList();
     } catch (e) {
       // ignore: avoid_print
       debugPrint('[SearchService] iTunes HATA: $e');
       return [];
     }
+  }
+
+  Future<List<SearchResult>> _searchItunes(String query, String country) async {
+    final url = Uri.https('itunes.apple.com', '/search', {
+      'term': query,
+      'entity': 'album',
+      'limit': '10',
+      'country': country,
+    });
+    final res = await http.get(url).timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return [];
+
+    final data = json.decode(res.body) as Map<String, dynamic>;
+    final results = (data['results'] as List?) ?? [];
+
+    return results.take(10).map((item) {
+      final releaseDate = item['releaseDate'] as String?;
+      final year = releaseDate != null && releaseDate.length >= 4
+          ? int.tryParse(releaseDate.substring(0, 4))
+          : null;
+      final poster = (item['artworkUrl100'] as String?)?.replaceAll('100x100', '200x200');
+
+      return SearchResult(
+        externalId: item['collectionId']?.toString() ?? '',
+        title: item['collectionName'] ?? item['trackName'] ?? '',
+        subtitle: item['artistName'] as String?,
+        posterUrl: poster,
+        year: year,
+        mediaType: 'music',
+        genres: item['primaryGenreName'] != null ? [item['primaryGenreName']] : [],
+        author: item['artistName'] as String?,
+        overview: null,
+      );
+    }).where((r) => r.title.isNotEmpty).toList();
   }
 }
 

@@ -11,6 +11,7 @@ import 'follow_list_screen.dart';
 import 'fullscreen_avatar_screen.dart';
 import '../admin/admin_reports_screen.dart';
 import '../diary/diary_screen.dart';
+import '../profile/statistics_screen.dart';
 import '../../core/app_strings.dart';
 
 class SocialProfileScreen extends StatefulWidget {
@@ -629,6 +630,40 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // ─── İSTATİSTİK BUTONU (SADECE KENDİ PROFİLİ İSE) ───
+            if (isMe) ...[
+              InkWell(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatisticsScreen())),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.bar_chart_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          AppStrings.isEn ? 'View My Statistics' : 'İstatistiklerimi Görüntüle',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.primary),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            // ─── PROFİL BAŞLANGICI ───
             Row(
               children: [
                 GestureDetector(
