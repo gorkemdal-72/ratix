@@ -11,6 +11,7 @@ import '../../models/rating_type.dart';
 import '../../services/settings_service.dart';
 import '../../providers/theme_provider.dart';
 import '../settings/settings_screen.dart';
+import '../discover/discover_screen.dart';
 import '../details/category_detail_screen.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,6 +63,12 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildSortMenuItem(CategorySort.nameDesc, 'İsim (Z - A)', Icons.sort_by_alpha_rounded),
               _buildSortMenuItem(CategorySort.type, 'Kategori Türü', Icons.category_rounded),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.explore_outlined),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscoverScreen()));
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),

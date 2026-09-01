@@ -22,7 +22,8 @@ class ItemModel {
   final String? categoryId;   // Kategori ID'si
   final int? runtime;         // Toplam izleme süresi (dakika)
   final Map<String, dynamic>? seasonsData; // Dizi sezon ve bölüm seçim verileri
-  final int rewatchCount;     // YENİ: Tekrar izleme sayısı
+  final int rewatchCount;     // Tekrar izleme sayısı
+  final bool isSpoiler;       // YENİ: Spoiler Kalkanı
 
   ItemModel({
     required this.id,
@@ -47,6 +48,7 @@ class ItemModel {
     this.runtime,
     this.seasonsData,
     this.rewatchCount = 0,
+    this.isSpoiler = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -66,6 +68,7 @@ class ItemModel {
       'author': author,
       'overview': overview,
       'review': review,
+      'is_spoiler': isSpoiler,
       'category_id': categoryId,
       'runtime': runtime,
       'seasons_data': seasonsData,
@@ -129,6 +132,7 @@ class ItemModel {
       author: map['author'] as String?,
       overview: map['overview'] as String?,
       review: map['review'] as String?,
+      isSpoiler: map['is_spoiler'] == true,
       categoryIcon: map['categories']?['icon'] as String?,
       categoryName: map['categories']?['name'] as String?,
       categoryId: map['category_id'] as String?,
@@ -161,6 +165,7 @@ class ItemModel {
     int? runtime,
     Map<String, dynamic>? seasonsData,
     int? rewatchCount,
+    bool? isSpoiler,
   }) {
     return ItemModel(
       id: id ?? this.id,
@@ -184,6 +189,7 @@ class ItemModel {
       runtime: runtime ?? this.runtime,
       seasonsData: seasonsData ?? this.seasonsData,
       rewatchCount: rewatchCount ?? this.rewatchCount,
+      isSpoiler: isSpoiler ?? this.isSpoiler,
     );
   }
 

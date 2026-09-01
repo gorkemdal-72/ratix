@@ -7,6 +7,7 @@ import '../post_detail_screen.dart';
 import '../social_profile_screen.dart';
 import '../../../core/app_strings.dart';
 import 'package:intl/intl.dart';
+import '../../../widgets/spoiler_shield.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -18,15 +19,15 @@ class PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<PostCard> {
-  late bool _isLiked;
-  late int _likeCount;
+  String? _myReaction;
+  late Map<String, int> _reactionCounts;
   bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _isLiked = widget.post.isLikedByMe;
-    _likeCount = widget.post.likeCount;
+    _myReaction = widget.post.myReaction;
+    _reactionCounts = Map.from(widget.post.reactionCounts);
     _checkAdminStatus();
   }
 
@@ -129,26 +130,99 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  bool _isLoadingLike = false;
+  bool _isLoadingReaction = false;
 
-  void _toggleLike() async {
-    if (_isLoadingLike) return;
+  void _setReaction(String? newReaction) async {
+    if (_isLoadingReaction) return;
+    
+    // Save previous state to revert if needed
+    final prevReaction = _myReaction;
+    final prevCounts = Map<String, int>.from(_reactionCounts);
+
     setState(() {
-      _isLoadingLike = true;
-      _isLiked = !_isLiked;
-      _likeCount += _isLiked ? 1 : -1;
+      _isLoadingReaction = true;
+      
+      // Remove old reaction count
+      if (_myReaction != null) {
+        _reactionCounts[_myReaction!] = (_reactionCounts[_myReaction!] ?? 1) - 1;
+        if (_reactionCounts[_myReaction!]! <= 0) _reactionCounts.remove(_myReaction!);
+      }
+
+      // Add new reaction count
+      if (newReaction != null) {
+        _reactionCounts[newReaction] = (_reactionCounts[newReaction] ?? 0) + 1;
+      }
+      
+      _myReaction = newReaction;
     });
+
     try {
-      await context.read<SocialService>().togglePostLike(widget.post.id, widget.post.userId, !_isLiked);
+      await context.read<SocialService>().setPostReaction(widget.post.id, widget.post.userId, newReaction);
     } catch (_) {
       if (mounted) {
         setState(() {
-          _isLiked = !_isLiked;
-          _likeCount += _isLiked ? 1 : -1;
+          _myReaction = prevReaction;
+          _reactionCounts = prevCounts;
         });
       }
     } finally {
-      if (mounted) setState(() => _isLoadingLike = false);
+      if (mounted) setState(() => _isLoadingReaction = false);
+    }
+  }
+
+  void _showReactionPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _reactionEmoji('like', '👍', ctx),
+            _reactionEmoji('funny', '😂', ctx),
+            _reactionEmoji('sad', '😭', ctx),
+            _reactionEmoji('wow', '😲', ctx),
+            _reactionEmoji('love', '😍', ctx),
+            _reactionEmoji('angry', '🤬', ctx),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _reactionEmoji(String type, String emoji, BuildContext ctx) {
+    final isSelected = _myReaction == type;
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(ctx);
+        _setReaction(isSelected ? null : type);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2) : Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: Text(emoji, style: const TextStyle(fontSize: 28)),
+      ),
+    );
+  }
+
+  String _getEmojiForReaction(String type) {
+    switch (type) {
+      case 'funny': return '😂';
+      case 'sad': return '😭';
+      case 'wow': return '😲';
+      case 'love': return '😍';
+      case 'angry': return '🤬';
+      case 'like':
+      default: return '👍';
     }
   }
 
@@ -362,7 +436,10 @@ class _PostCardState extends State<PostCard> {
               
               // Content
               if (widget.post.content != null && widget.post.content!.isNotEmpty) ...[
-                Text(widget.post.content!),
+                SpoilerShield(
+                  isSpoiler: widget.post.isSpoiler,
+                  child: Text(widget.post.content!),
+                ),
                 const SizedBox(height: 12),
               ],
 
@@ -412,14 +489,39 @@ class _PostCardState extends State<PostCard> {
               // Actions
               Row(
                 children: [
-                  IconButton(
-                    icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, color: _isLiked ? Colors.red : null),
-                    onPressed: _toggleLike,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                  GestureDetector(
+                    onTap: () {
+                      if (_myReaction == null) {
+                        _setReaction('like');
+                      } else {
+                        _setReaction(null); // Kaldır
+                      }
+                    },
+                    onLongPress: _showReactionPicker,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _myReaction != null ? Icons.favorite : Icons.favorite_border,
+                            color: _myReaction != null ? Colors.red : Colors.grey,
+                          ),
+                          if (_myReaction != null && _myReaction != 'like') ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              _getEmojiForReaction(_myReaction!),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 4),
-                  Text('$_likeCount', style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '${_reactionCounts.values.fold(0, (sum, count) => sum + count)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(width: 24),
                   const IconButton(
                     icon: Icon(Icons.chat_bubble_outline),

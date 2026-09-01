@@ -5,6 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:fl_chart/fl_chart.dart';
+import '../../widgets/spoiler_shield.dart';
+import '../../widgets/watch_providers_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/app_theme.dart';
 import '../../core/app_strings.dart';
@@ -665,29 +668,32 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                     ),
                     if (item.review != null && item.review!.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                "' ${item.review!} '",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
-                                  color: Theme.of(context).textTheme.bodySmall?.color,
+                      SpoilerShield(
+                        isSpoiler: item.isSpoiler,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  "' ${item.review!} '",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                    color: Theme.of(context).textTheme.bodySmall?.color,
+                                  ),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -925,6 +931,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   void _showRatingDialog(BuildContext context, ItemModel item) {
     double current = item.rating;
     final reviewCtrl = TextEditingController(text: item.review ?? '');
+    bool isSpoiler = item.isSpoiler;
     
     showDialog(
       context: context,
@@ -957,6 +964,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
+              
+              if (item.externalId != null && item.mediaType != null)
+                WatchProvidersWidget(mediaType: item.mediaType!, externalId: item.externalId!),
+
               TextField(
                 controller: reviewCtrl,
                 maxLines: 3,
@@ -967,6 +978,16 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(AppStrings.isEn ? 'Contains Spoiler' : 'Spoiler İçeriyor', style: const TextStyle(fontSize: 14)),
+                value: isSpoiler,
+                onChanged: (val) {
+                  if (val != null) setState(() => isSpoiler = val);
+                },
+              ),
             ],
           ),
         ),
@@ -975,7 +996,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ElevatedButton(
             onPressed: () {
               final reviewText = reviewCtrl.text.trim().isEmpty ? null : reviewCtrl.text.trim();
-              _dbService.updateItemRatingAndReview(widget.category.id, item.id, current, reviewText);
+              _dbService.updateItemRatingAndReview(widget.category.id, item.id, current, reviewText, isSpoiler: isSpoiler);
               Navigator.pop(ctx);
             },
             child: Text(AppStrings.updateItem),

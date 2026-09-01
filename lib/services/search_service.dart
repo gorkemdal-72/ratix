@@ -125,6 +125,84 @@ class SearchService {
     }
   }
 
+  // ─── TMDB: Watch Providers (Nereden İzlenir) ───
+  Future<List<Map<String, dynamic>>> getWatchProviders(String mediaType, String id, {String region = 'TR'}) async {
+    if (mediaType != 'movie' && mediaType != 'tv' && mediaType != 'tvShow') return [];
+    final type = mediaType == 'tvShow' ? 'tv' : mediaType;
+    try {
+      final key = ApiKeys.tmdb;
+      if (key.isEmpty || key.contains('BURAYA')) return [];
+
+      final url = Uri.https('api.themoviedb.org', '/3/$type/$id/watch/providers', {
+        'api_key': key,
+      });
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return [];
+
+      final data = json.decode(res.body) as Map<String, dynamic>;
+      final results = data['results'] as Map<String, dynamic>?;
+      if (results == null || !results.containsKey(region)) return [];
+
+      final regionData = results[region] as Map<String, dynamic>;
+      // flatrate: Netflix, Prime vb. abonelikler
+      // buy / rent: Satın alma / Kiralama
+      final flatrate = (regionData['flatrate'] as List?) ?? [];
+      
+      return flatrate.map((e) => {
+        'name': e['provider_name'],
+        'logo_path': 'https://image.tmdb.org/t/p/w92${e['logo_path']}',
+      }).toList();
+    } catch (e) {
+      debugPrint('[SearchService] WatchProviders HATA: $e');
+      return [];
+    }
+  }
+
+  // ─── TMDB: Keşfet (Trending) ───
+  Future<List<SearchResult>> getTrending({String mediaType = 'all', String timeWindow = 'day'}) async {
+    try {
+      final key = ApiKeys.tmdb;
+      if (key.isEmpty || key.contains('BURAYA')) return [];
+
+      final url = Uri.https('api.themoviedb.org', '/3/trending/$mediaType/$timeWindow', {
+        'api_key': key,
+        'language': 'tr-TR',
+      });
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return [];
+
+      final data = json.decode(res.body) as Map<String, dynamic>;
+      final results = (data['results'] as List?) ?? [];
+
+      return results.take(15).map((item) {
+        final mType = item['media_type'] ?? mediaType;
+        final title = mType == 'movie'
+            ? (item['original_title'] ?? item['title'] ?? '') as String
+            : (item['original_name'] ?? item['name'] ?? '') as String;
+        final date = (item['release_date'] ?? item['first_air_date'] ?? '') as String;
+        final year = date.length >= 4 ? int.tryParse(date.substring(0, 4)) : null;
+        final poster = item['poster_path'] != null
+            ? 'https://image.tmdb.org/t/p/w200${item['poster_path']}'
+            : null;
+        final genreIds = (item['genre_ids'] as List?)?.map((e) => e.toString()).toList() ?? [];
+
+        return SearchResult(
+          externalId: item['id'].toString(),
+          title: title,
+          subtitle: year != null ? '$year' : null,
+          posterUrl: poster,
+          year: year,
+          mediaType: mType,
+          genres: genreIds,
+          overview: item['overview'] as String?,
+        );
+      }).where((r) => r.title.isNotEmpty).toList();
+    } catch (e) {
+      debugPrint('[SearchService] Trending HATA: $e');
+      return [];
+    }
+  }
+
   // ─── TMDB: TV Dizi Sezon Detaylarını Getir ───
   Future<TvShowDetails?> getTvDetails(String tvId) async {
     try {
@@ -396,7 +474,7 @@ class SearchService {
 
         return SearchResult(
           externalId: item['id'].toString(),
-          title: item['name'] ?? '',
+          title: item['name_original'] ?? item['name'] ?? '',
           subtitle: year?.toString(),
           posterUrl: item['background_image'] as String?,
           year: year,
@@ -427,7 +505,7 @@ class SearchService {
       // Birleştir, duplicate kaldır (collectionId bazlı)
       final seenIds = <String>{};
       final merged = <SearchResult>[];
-      for (final r in [...trResults, ...usResults]) {
+      for (final r in [...usResults, ...trResults]) {
         if (seenIds.add(r.externalId)) merged.add(r);
       }
       return merged.take(10).toList();

@@ -131,7 +131,7 @@ class SocialService {
     }
 
     final res = await _supabase.from('posts')
-        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id), comments(id)')
+        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id, reaction_type), comments(id)')
         .inFilter('user_id', userIds)
         .order('created_at', ascending: false)
         .range(offset, offset + limit * 2);
@@ -146,7 +146,7 @@ class SocialService {
   // Discover: Sadece herkese açık (public) gönderiler
   Future<List<Post>> getDiscoverPosts({int limit = 20, int offset = 0}) async {
     final res = await _supabase.from('posts')
-        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id), comments(id)')
+        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id, reaction_type), comments(id)')
         .eq('visibility', 'public')
         .order('is_editors_choice', ascending: false)
         .order('created_at', ascending: false)
@@ -161,7 +161,7 @@ class SocialService {
 
   Future<List<Post>> getUserPosts(String userId, {int limit = 20, int offset = 0}) async {
     final res = await _supabase.from('posts')
-        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id), comments(id)')
+        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id, reaction_type), comments(id)')
         .eq('user_id', userId)
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
@@ -176,7 +176,7 @@ class SocialService {
 
   Future<Post?> getPostById(String postId) async {
     final res = await _supabase.from('posts')
-        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id), comments(id)')
+        .select('*, users!posts_user_id_fkey(*), items(*), post_likes(user_id, reaction_type), comments(id)')
         .eq('id', postId)
         .maybeSingle();
     
@@ -195,31 +195,40 @@ class SocialService {
 
   List<Post> _parsePosts(List<dynamic> data) {
     return data.map((json) {
-      bool isLiked = false;
+      String? myReaction;
       if (currentUserId != null && json['post_likes'] != null) {
         final likes = json['post_likes'] as List;
-        isLiked = likes.any((like) => like['user_id'] == currentUserId);
+        for (var like in likes) {
+          if (like is Map && like['user_id'] == currentUserId) {
+            myReaction = like['reaction_type']?.toString() ?? 'like';
+            break;
+          }
+        }
       }
-      return Post.fromJson(json, isLiked: isLiked);
+      return Post.fromJson(json, myReaction: myReaction);
     }).toList();
   }
 
   // ─── LIKES ───
 
-  Future<void> togglePostLike(String postId, String postOwnerId, bool isLiked) async {
+  Future<void> setPostReaction(String postId, String postOwnerId, String? reactionType) async {
     if (currentUserId == null) return;
     try {
-      if (isLiked) {
+      if (reactionType == null) {
+        // Reaksiyonu kaldır
         await _supabase.from('post_likes')
             .delete()
             .match({'user_id': currentUserId!, 'post_id': postId});
       } else {
-        await _supabase.from('post_likes').insert({
+        // Yeni reaksiyon ekle veya güncelle (Upsert)
+        await _supabase.from('post_likes').upsert({
           'user_id': currentUserId,
           'post_id': postId,
-        });
+          'reaction_type': reactionType,
+        }, onConflict: 'user_id, post_id'); // Note: Make sure there's a unique constraint on (user_id, post_id)
+        
         if (postOwnerId != currentUserId) {
-          await _sendNotification(postOwnerId, 'post_like', postId, null);
+          await _sendNotification(postOwnerId, 'post_reaction', postId, null);
         }
       }
     } catch (_) {}

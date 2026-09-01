@@ -314,6 +314,18 @@ class DatabaseService {
       debugPrint('[DatabaseService] updateItemRuntime ERROR: $e');
     }
   }
+  // YENİ: updateItemRatingAndReview'de isSpoiler eklendi
+  Future<void> updateItemRatingAndReview(String categoryId, String itemId, double rating, String? review, {bool isSpoiler = false}) async {
+    try {
+      await _supabase.from('items').update({
+        'rating': rating,
+        'review': review,
+        'is_spoiler': isSpoiler,
+      }).eq('id', itemId);
+    } catch (e) {
+      debugPrint('[DatabaseService] updateRatingAndReview ERROR: $e');
+    }
+  }
   // YENİ: Tekrar İzleme (Rewatch) Sayısını Güncelleme (Artırma/Azaltma)
   Future<void> updateRewatchCount(String itemId, int newCount) async {
     final userId = _supabase.auth.currentUser?.id;
@@ -379,9 +391,7 @@ class DatabaseService {
   }
 
   // --- Update Item Rating & Review ---
-  Future<void> updateItemRatingAndReview(String categoryId, String itemId, double rating, String? review) async {
-    await _supabase.from('items').update({'rating': rating, 'review': review}).eq('id', itemId);
-  }
+  // --- Update Item Rating & Review (Removed duplicate) ---
 
   // --- Update Item Status ---
   Future<void> updateItemStatus(String categoryId, String itemId, String watchStatus) async {
